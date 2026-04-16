@@ -12,7 +12,7 @@ SYSDIR="/mnt/SDCARD/.tmp_update"
 DATADIR="$APPDIR/data"
 LANGDIR="$APPDIR/lang"
 CONFIG="$DATADIR/config.cfg"
-STATS_FILE="$DATADIR/stats.csv"
+STATS_FILE="$DATADIR/stats.dat"
 HISTORY_FILE="$DATADIR/history.log"
 
 PROMPT="$SYSDIR/bin/prompt"
@@ -31,61 +31,67 @@ PAGE_SIZE=10
 
 log() { echo "[GuardianPlay] $1"; }
 
-# Load language strings based on Onion OS system.json language setting
-load_language() {
-    local sys_lang="en"
+# Detect Onion OS language from system.json
+# Handles: "en", "English", "english", "fr", "French", etc.
+detect_system_lang() {
     if [ -f "/mnt/SDCARD/system.json" ]; then
-        sys_lang=$(grep -o '"language"[[:space:]]*:[[:space:]]*"[^"]*"' /mnt/SDCARD/system.json \
-                   | sed 's/.*"\([^"]*\)"/\1/' | head -1)
+        _raw=$(grep -o '"language"[[:space:]]*:[[:space:]]*"[^"]*"' \
+               /mnt/SDCARD/system.json | sed 's/.*"\([^"]*\)"/\1/' | head -1)
+        # Normalise to lowercase
+        echo "$_raw" | tr 'A-Z' 'a-z'
+    else
+        echo "en"
     fi
-    case "$sys_lang" in
-        fr|french|FR) . "$LANGDIR/fr.sh" ;;
-        es|spanish|ES) . "$LANGDIR/es.sh" ;;
-        *) . "$LANGDIR/en.sh" ;;
+}
+
+load_language() {
+    _lang=$(detect_system_lang)
+    case "$_lang" in
+        fr*) . "$LANGDIR/fr.sh" ;;
+        es*) . "$LANGDIR/es.sh" ;;
+        *)   . "$LANGDIR/en.sh" ;;
     esac
     log "Language loaded: $GP_LANG"
 }
 
-# Load config file into variables
+# Load config — uses GP_TIMER_SECS (not GP_TIME_REMAINING which is a lang label)
 load_config() {
     if [ -f "$CONFIG" ]; then
-        # shellcheck disable=SC1090
         . "$CONFIG"
     else
-        # Defaults
         GP_ENABLED_STATE=0
         GP_PIN="0000"
-        GP_TIME_REMAINING=3600
+        GP_TIMER_SECS=3600
     fi
-    # Ensure numeric
-    GP_TIME_REMAINING=$(( ${GP_TIME_REMAINING:-3600} + 0 ))
+    GP_TIMER_SECS=$(( ${GP_TIMER_SECS:-3600} + 0 ))
     GP_ENABLED_STATE=$(( ${GP_ENABLED_STATE:-0} + 0 ))
 }
 
-# Save config to file
 save_config() {
     mkdir -p "$DATADIR"
-    cat > "$CONFIG" << EOF
-# GuardianPlay Configuration — do not edit while app is running
+    cat > "$CONFIG" << CFGEOF
+# GuardianPlay Configuration
+# PIN is in plaintext so parents can recover it from a PC
 GP_ENABLED_STATE=${GP_ENABLED_STATE}
 GP_PIN=${GP_PIN}
-GP_TIME_REMAINING=${GP_TIME_REMAINING}
-EOF
-    log "Config saved. Enabled=$GP_ENABLED_STATE Time=${GP_TIME_REMAINING}s"
+GP_TIMER_SECS=${GP_TIMER_SECS}
+CFGEOF
+    sync
+    log "Config saved. Enabled=$GP_ENABLED_STATE Time=${GP_TIMER_SECS}s"
 }
 
 # Format seconds as "Xh YYmin" or "YYmin" or "< 1 min"
 format_time() {
-    local total_secs="$1"
-    local h=$(( total_secs / 3600 ))
-    local m=$(( (total_secs % 3600) / 60 ))
-    local s=$(( total_secs % 60 ))
-    if [ "$h" -gt 0 ]; then
-        printf "%d%s %02d%s" "$h" "$GP_HOURS" "$m" "$GP_MINUTES"
-    elif [ "$m" -gt 0 ]; then
-        printf "%d%s" "$m" "$GP_MINUTES"
-    elif [ "$total_secs" -gt 0 ]; then
-        printf "%d%s" "$s" "$GP_SECONDS"
+    _ts="$1"
+    _h=$(( _ts / 3600 ))
+    _m=$(( (_ts % 3600) / 60 ))
+    _s=$(( _ts % 60 ))
+    if [ "$_h" -gt 0 ]; then
+        printf "%d%s %02d%s" "$_h" "$GP_HOURS" "$_m" "$GP_MINUTES"
+    elif [ "$_m" -gt 0 ]; then
+        printf "%d%s" "$_m" "$GP_MINUTES"
+    elif [ "$_ts" -gt 0 ]; then
+        printf "%d%s" "$_s" "$GP_SECONDS"
     else
         printf "0 %s" "$GP_MINUTES"
     fi
@@ -94,45 +100,11 @@ format_time() {
 # Rotate history file if it exceeds 500 MB
 rotate_history() {
     if [ -f "$HISTORY_FILE" ]; then
-        local size
-        size=$(wc -c < "$HISTORY_FILE" 2>/dev/null || echo 0)
-        if [ "$size" -gt "$MAX_HISTORY_BYTES" ]; then
-            log "History file too large ($size bytes), rotating..."
-            # Keep only the last 500 lines
-            local tmp="/tmp/gp_history_tmp"
-            tail -500 "$HISTORY_FILE" > "$tmp" && mv "$tmp" "$HISTORY_FILE"
+        _sz=$(wc -c < "$HISTORY_FILE" 2>/dev/null || echo 0)
+        if [ "$_sz" -gt "$MAX_HISTORY_BYTES" ]; then
+            log "History file too large ($_sz bytes), rotating..."
+            tail -500 "$HISTORY_FILE" > /tmp/gp_history_tmp && mv /tmp/gp_history_tmp "$HISTORY_FILE"
         fi
-    fi
-}
-
-# Add entry to history log: "YYYY-MM-DD HH:MM:SS|game_name"
-add_history_entry() {
-    local game="$1"
-    local ts
-    ts=$(date '+%Y-%m-%d %H:%M:%S')
-    mkdir -p "$DATADIR"
-    echo "${ts}|${game}" >> "$HISTORY_FILE"
-    rotate_history
-}
-
-# Update stats for a game (increments session seconds)
-update_stats() {
-    local game="$1"
-    local seconds="$2"
-    mkdir -p "$DATADIR"
-    touch "$STATS_FILE"
-    # Check if game already exists in stats
-    if grep -q "^${game}," "$STATS_FILE" 2>/dev/null; then
-        local current
-        current=$(grep "^${game}," "$STATS_FILE" | cut -d',' -f2)
-        local new_total=$(( current + seconds ))
-        # Replace the line
-        local tmpfile="/tmp/gp_stats_tmp"
-        grep -v "^${game}," "$STATS_FILE" > "$tmpfile"
-        echo "${game},${new_total}" >> "$tmpfile"
-        mv "$tmpfile" "$STATS_FILE"
-    else
-        echo "${game},${seconds}" >> "$STATS_FILE"
     fi
 }
 
@@ -140,44 +112,36 @@ update_stats() {
 # PIN MANAGEMENT
 # ============================================================
 
-# Ask user to enter a single digit (0–9)
-# Returns: exit code = the digit entered (0–9), 255 = cancelled
+# Ask user to enter a single digit (0-9)
+# Returns: exit code = the digit entered (0-9), 255 = cancelled
 ask_digit() {
-    local title="$1"
-    local msg="$2"
-    "$PROMPT" -t "$title" -m "$msg" \
+    "$PROMPT" -t "$1" -m "$2" \
         "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
     return $?
 }
 
 # Enter a 4-digit PIN interactively
-# Sets GP_ENTERED_PIN (as 4-digit string) on success
-# Returns 0 on success, 1 if cancelled
+# Sets GP_ENTERED_PIN on success — returns 0=ok, 1=cancelled
 enter_pin_interactive() {
-    local title="$1"
-    local d1 d2 d3 d4
+    _pin_title="$1"
 
-    ask_digit "$title" "$(printf "$GP_PIN_DIGIT" 1)"
-    d1=$?
-    [ "$d1" -eq 255 ] && return 1
+    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 1)"
+    _d1=$?; [ "$_d1" -ge 10 ] && return 1
 
-    ask_digit "$title" "$(printf "$GP_PIN_DIGIT" 2)"
-    d2=$?
-    [ "$d2" -eq 255 ] && return 1
+    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 2)"
+    _d2=$?; [ "$_d2" -ge 10 ] && return 1
 
-    ask_digit "$title" "$(printf "$GP_PIN_DIGIT" 3)"
-    d3=$?
-    [ "$d3" -eq 255 ] && return 1
+    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 3)"
+    _d3=$?; [ "$_d3" -ge 10 ] && return 1
 
-    ask_digit "$title" "$(printf "$GP_PIN_DIGIT" 4)"
-    d4=$?
-    [ "$d4" -eq 255 ] && return 1
+    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 4)"
+    _d4=$?; [ "$_d4" -ge 10 ] && return 1
 
-    GP_ENTERED_PIN="${d1}${d2}${d3}${d4}"
+    GP_ENTERED_PIN="${_d1}${_d2}${_d3}${_d4}"
     return 0
 }
 
-# Verify PIN: returns 0 if correct, 1 if wrong
+# Verify PIN: returns 0 if correct, 1 if wrong/cancelled
 verify_pin() {
     enter_pin_interactive "$GP_PIN_TITLE" || return 1
     if [ "$GP_ENTERED_PIN" = "$GP_PIN" ]; then
@@ -189,24 +153,23 @@ verify_pin() {
 }
 
 # ============================================================
-# FIRST-TIME SETUP (PIN initialisation)
+# FIRST-TIME SETUP
 # ============================================================
 
 first_time_setup() {
     "$INFOPANEL" --title "$GP_PIN_INIT_TITLE" --message "$GP_PIN_INIT_MSG" --auto
 
     while true; do
-        # New PIN
-        enter_pin_interactive "$GP_PIN_TITLE" || return 1
-        local new_pin="$GP_ENTERED_PIN"
+        enter_pin_interactive "$GP_PIN_NEW" || return 1
+        _new_pin="$GP_ENTERED_PIN"
 
-        # Confirm PIN
-        enter_pin_interactive "$GP_PIN_TITLE" || return 1
-        local confirm_pin="$GP_ENTERED_PIN"
+        enter_pin_interactive "$GP_PIN_CONFIRM_NEW" || return 1
+        _confirm_pin="$GP_ENTERED_PIN"
 
-        if [ "$new_pin" = "$confirm_pin" ]; then
-            GP_PIN="$new_pin"
+        if [ "$_new_pin" = "$_confirm_pin" ]; then
+            GP_PIN="$_new_pin"
             GP_ENABLED_STATE=1
+            GP_TIMER_SECS=3600
             save_config
             "$INFOPANEL" --title "$GP_SUCCESS" --message "$GP_ENABLED_MSG" --auto
             return 0
@@ -221,18 +184,17 @@ first_time_setup() {
 # ============================================================
 
 ui_change_pin() {
-    # First verify current PIN
     verify_pin || return
 
     while true; do
-        enter_pin_interactive "$GP_PIN_TITLE" || return
-        local new_pin="$GP_ENTERED_PIN"
+        enter_pin_interactive "$GP_PIN_NEW" || return
+        _new_pin="$GP_ENTERED_PIN"
 
-        enter_pin_interactive "$GP_PIN_TITLE" || return
-        local confirm_pin="$GP_ENTERED_PIN"
+        enter_pin_interactive "$GP_PIN_CONFIRM_NEW" || return
+        _confirm_pin="$GP_ENTERED_PIN"
 
-        if [ "$new_pin" = "$confirm_pin" ]; then
-            GP_PIN="$new_pin"
+        if [ "$_new_pin" = "$_confirm_pin" ]; then
+            GP_PIN="$_new_pin"
             save_config
             "$INFOPANEL" --title "$GP_SUCCESS" --message "$GP_PIN_CHANGED" --auto
             return
@@ -248,19 +210,16 @@ ui_change_pin() {
 
 ui_toggle_parental() {
     if [ "$GP_ENABLED_STATE" -eq 0 ]; then
-        # Enable: needs PIN
         enter_pin_interactive "$GP_ENABLE_TITLE" || return
         if [ "$GP_ENTERED_PIN" = "$GP_PIN" ]; then
             GP_ENABLED_STATE=1
             save_config
-            # Notify daemon to reload config
             touch /tmp/gp_config_changed
             "$INFOPANEL" --title "$GP_APP_NAME" --message "$GP_ENABLED_MSG" --auto
         else
             "$INFOPANEL" --title "$GP_ERROR" --message "$GP_PIN_WRONG" --auto
         fi
     else
-        # Disable: needs PIN
         enter_pin_interactive "$GP_DISABLE_TITLE" || return
         if [ "$GP_ENTERED_PIN" = "$GP_PIN" ]; then
             GP_ENABLED_STATE=0
@@ -278,51 +237,48 @@ ui_toggle_parental() {
 # ============================================================
 
 ui_add_time() {
-    local choice
+    _time_str=$(format_time "$GP_TIMER_SECS")
     "$PROMPT" -t "$GP_TIME_TITLE" \
-        -m "$(format_time "$GP_TIME_REMAINING") $GP_TIME_REMAINING" \
+        -m "$GP_TIME_REMAINING: $_time_str" \
         "$GP_ADD_10" \
         "$GP_ADD_60" \
         "$GP_ADD_2H" \
         "$GP_ADD_3H"
-    choice=$?
-    case "$choice" in
-        0) GP_TIME_REMAINING=$(( GP_TIME_REMAINING + 600 )) ;;
-        1) GP_TIME_REMAINING=$(( GP_TIME_REMAINING + 3600 )) ;;
-        2) GP_TIME_REMAINING=$(( GP_TIME_REMAINING + 7200 )) ;;
-        3) GP_TIME_REMAINING=$(( GP_TIME_REMAINING + 10800 )) ;;
+    _ch=$?
+    case "$_ch" in
+        0) GP_TIMER_SECS=$(( GP_TIMER_SECS + 600 )) ;;
+        1) GP_TIMER_SECS=$(( GP_TIMER_SECS + 3600 )) ;;
+        2) GP_TIMER_SECS=$(( GP_TIMER_SECS + 7200 )) ;;
+        3) GP_TIMER_SECS=$(( GP_TIMER_SECS + 10800 )) ;;
         *) return ;;
     esac
     save_config
     touch /tmp/gp_config_changed
-    local msg
-    msg=$(printf "$GP_TIME_UPDATED" "$(format_time "$GP_TIME_REMAINING")")
-    "$INFOPANEL" --title "$GP_TIME_TITLE" --message "$msg" --auto
+    _msg=$(printf "$GP_TIME_UPDATED" "$(format_time "$GP_TIMER_SECS")")
+    "$INFOPANEL" --title "$GP_TIME_TITLE" --message "$_msg" --auto
 }
 
 ui_remove_time() {
-    local choice
+    _time_str=$(format_time "$GP_TIMER_SECS")
     "$PROMPT" -t "$GP_TIME_TITLE" \
-        -m "$(format_time "$GP_TIME_REMAINING")" \
+        -m "$GP_TIME_REMAINING: $_time_str" \
         "$GP_REMOVE_10" \
         "$GP_REMOVE_60" \
         "$GP_REMOVE_2H" \
         "$GP_TIME_SET_TO_ZERO"
-    choice=$?
-    case "$choice" in
-        0) GP_TIME_REMAINING=$(( GP_TIME_REMAINING - 600 )) ;;
-        1) GP_TIME_REMAINING=$(( GP_TIME_REMAINING - 3600 )) ;;
-        2) GP_TIME_REMAINING=$(( GP_TIME_REMAINING - 7200 )) ;;
-        3) GP_TIME_REMAINING=0 ;;
+    _ch=$?
+    case "$_ch" in
+        0) GP_TIMER_SECS=$(( GP_TIMER_SECS - 600 )) ;;
+        1) GP_TIMER_SECS=$(( GP_TIMER_SECS - 3600 )) ;;
+        2) GP_TIMER_SECS=$(( GP_TIMER_SECS - 7200 )) ;;
+        3) GP_TIMER_SECS=0 ;;
         *) return ;;
     esac
-    # Clamp to zero
-    [ "$GP_TIME_REMAINING" -lt 0 ] && GP_TIME_REMAINING=0
+    [ "$GP_TIMER_SECS" -lt 0 ] && GP_TIMER_SECS=0
     save_config
     touch /tmp/gp_config_changed
-    local msg
-    msg=$(printf "$GP_TIME_UPDATED" "$(format_time "$GP_TIME_REMAINING")")
-    "$INFOPANEL" --title "$GP_TIME_TITLE" --message "$msg" --auto
+    _msg=$(printf "$GP_TIME_UPDATED" "$(format_time "$GP_TIMER_SECS")")
+    "$INFOPANEL" --title "$GP_TIME_TITLE" --message "$_msg" --auto
 }
 
 # ============================================================
@@ -333,32 +289,24 @@ ui_settings() {
     while true; do
         load_config
 
-        local status_str
         if [ "$GP_ENABLED_STATE" -eq 1 ]; then
-            status_str="$GP_STATUS_ON"
+            _status="$GP_STATUS_ON"
+            _toggle="$GP_TOGGLE_DISABLE"
         else
-            status_str="$GP_STATUS_OFF"
+            _status="$GP_STATUS_OFF"
+            _toggle="$GP_TOGGLE_ENABLE"
         fi
-
-        local time_str
-        time_str=$(format_time "$GP_TIME_REMAINING")
-
-        local toggle_label
-        if [ "$GP_ENABLED_STATE" -eq 0 ]; then
-            toggle_label="$GP_TOGGLE_ENABLE"
-        else
-            toggle_label="$GP_TOGGLE_DISABLE"
-        fi
+        _time_str=$(format_time "$GP_TIMER_SECS")
 
         "$PROMPT" -t "$GP_SETTINGS_TITLE" \
-            -m "$GP_STATUS: $status_str  |  $GP_TIME_REMAINING: $time_str" \
-            "$toggle_label" \
+            -m "$GP_STATUS: $_status  |  $GP_TIME_REMAINING: $_time_str" \
+            "$_toggle" \
             "$GP_CHANGE_PIN" \
             "$GP_ADD_TIME" \
             "$GP_REMOVE_TIME" \
             "$GP_BACK"
-        local choice=$?
-        case "$choice" in
+        _ch=$?
+        case "$_ch" in
             0) ui_toggle_parental ;;
             1) ui_change_pin ;;
             2) ui_add_time ;;
@@ -379,45 +327,42 @@ ui_stats() {
     fi
 
     # Sort by total seconds descending, get top 20
-    local stats_lines
-    stats_lines=$(sort -t',' -k2 -rn "$STATS_FILE" | head -20)
+    # Stats format: game_name|seconds
+    _stats=$(sort -t'|' -k2 -rn "$STATS_FILE" | head -20)
+    _msg=""
+    _total=0
+    _count=0
 
-    # Build message string (max ~800 chars for infoPanel)
-    local msg=""
-    local total_all=0
-    local count=0
-
-    while IFS=',' read -r game secs; do
-        [ -z "$game" ] && continue
-        total_all=$(( total_all + secs ))
-        count=$(( count + 1 ))
-        if [ "$count" -le 10 ]; then
-            # Truncate game name to 22 chars
-            local short_name
-            short_name=$(echo "$game" | cut -c1-22)
-            local t
-            t=$(format_time "$secs")
-            msg="${msg}\n${count}. ${short_name} — ${t}"
+    _oldIFS="$IFS"
+    IFS='
+'
+    for _line in $_stats; do
+        _game=$(echo "$_line" | cut -d'|' -f1)
+        _secs=$(echo "$_line" | cut -d'|' -f2)
+        [ -z "$_game" ] && continue
+        _total=$(( _total + _secs ))
+        _count=$(( _count + 1 ))
+        if [ "$_count" -le 10 ]; then
+            _short=$(echo "$_game" | cut -c1-22)
+            _t=$(format_time "$_secs")
+            _msg="${_msg}\n${_count}. ${_short} - ${_t}"
         fi
-    done << EOF
-$stats_lines
-EOF
+    done
+    IFS="$_oldIFS"
 
-    local total_str
-    total_str=$(format_time "$total_all")
-    local full_msg
-    full_msg="$GP_STATS_TOTAL $total_str\n\n$GP_STATS_TOP$msg"
+    _total_str=$(format_time "$_total")
+    _full="$GP_STATS_TOTAL $_total_str\n\n$GP_STATS_TOP$_msg"
 
     "$PROMPT" -t "$GP_STATS_TITLE" \
-        -m "$full_msg" \
+        -m "$_full" \
         "$GP_STATS_RESET" \
         "$GP_BACK"
-    local choice=$?
-    if [ "$choice" -eq 0 ]; then
+    _ch=$?
+    if [ "$_ch" -eq 0 ]; then
         "$PROMPT" -t "$GP_STATS_TITLE" -m "$GP_STATS_RESET_CONFIRM" \
             "$GP_YES" "$GP_NO"
-        local confirm=$?
-        if [ "$confirm" -eq 0 ]; then
+        _confirm=$?
+        if [ "$_confirm" -eq 0 ]; then
             rm -f "$STATS_FILE"
             "$INFOPANEL" --title "$GP_STATS_TITLE" --message "$GP_STATS_RESET_DONE" --auto
         fi
@@ -434,98 +379,70 @@ ui_history() {
         return
     fi
 
-    # Get last 50 entries in reverse order (newest first)
-    local lines
-    lines=$(tail -"$HISTORY_DISPLAY_MAX" "$HISTORY_FILE" | sort -r)
-    local total
-    total=$(echo "$lines" | wc -l)
-
-    local page=1
-    local total_pages=$(( (total + PAGE_SIZE - 1) / PAGE_SIZE ))
-    [ "$total_pages" -eq 0 ] && total_pages=1
+    # Get last 50 entries (already chronological — reverse for display)
+    _lines=$(tail -"$HISTORY_DISPLAY_MAX" "$HISTORY_FILE" | sort -r)
+    _total=$(echo "$_lines" | wc -l)
+    _page=1
+    _pages=$(( (_total + PAGE_SIZE - 1) / PAGE_SIZE ))
+    [ "$_pages" -eq 0 ] && _pages=1
 
     while true; do
-        local start=$(( (page - 1) * PAGE_SIZE + 1 ))
-        local end=$(( page * PAGE_SIZE ))
-        [ "$end" -gt "$total" ] && end="$total"
+        _start=$(( (_page - 1) * PAGE_SIZE + 1 ))
+        _end=$(( _page * PAGE_SIZE ))
+        [ "$_end" -gt "$_total" ] && _end="$_total"
 
-        local msg=""
-        local n="$start"
-        local page_lines
-        page_lines=$(echo "$lines" | sed -n "${start},${end}p")
+        _msg=""
+        _n="$_start"
+        _plines=$(echo "$_lines" | sed -n "${_start},${_end}p")
 
-        while IFS='|' read -r ts game; do
-            [ -z "$ts" ] && continue
-            local short_game
-            short_game=$(echo "$game" | cut -c1-20)
-            local short_ts
-            short_ts=$(echo "$ts" | cut -c1-16)
-            msg="${msg}\n${n}. [${short_ts}] ${short_game}"
-            n=$(( n + 1 ))
-        done << EOF
-$page_lines
-EOF
+        _oldIFS="$IFS"
+        IFS='
+'
+        for _entry in $_plines; do
+            _ts=$(echo "$_entry" | cut -d'|' -f1 | cut -c1-16)
+            _game=$(echo "$_entry" | cut -d'|' -f2 | cut -c1-20)
+            [ -z "$_ts" ] && continue
+            _msg="${_msg}\n${_n}. [${_ts}] ${_game}"
+            _n=$(( _n + 1 ))
+        done
+        IFS="$_oldIFS"
 
-        local page_info
-        page_info=$(printf "$GP_HISTORY_PAGE" "$page" "$total_pages")
+        _pinfo=$(printf "$GP_HISTORY_PAGE" "$_page" "$_pages")
 
-        local nav_prev="< Prev"
-        local nav_next="Next >"
-
-        if [ "$total_pages" -gt 1 ]; then
+        if [ "$_pages" -gt 1 ]; then
             "$PROMPT" -t "$GP_HISTORY_TITLE" \
-                -m "$page_info\n$msg" \
-                "$nav_prev" "$nav_next" \
+                -m "${_pinfo}\n${_msg}" \
+                "< Prev" "Next >" \
                 "$GP_HISTORY_CLEAR" "$GP_BACK"
-        else
-            "$PROMPT" -t "$GP_HISTORY_TITLE" \
-                -m "$msg" \
-                "$GP_HISTORY_CLEAR" "$GP_BACK"
-        fi
-        local choice=$?
-
-        if [ "$total_pages" -gt 1 ]; then
-            case "$choice" in
-                0)  # Prev
-                    page=$(( page - 1 ))
-                    [ "$page" -lt 1 ] && page="$total_pages"
-                    ;;
-                1)  # Next
-                    page=$(( page + 1 ))
-                    [ "$page" -gt "$total_pages" ] && page=1
-                    ;;
-                2)  # Clear
-                    "$PROMPT" -t "$GP_HISTORY_TITLE" \
-                        -m "$GP_HISTORY_CLEAR_CONFIRM" \
-                        "$GP_YES" "$GP_NO"
-                    local confirm=$?
-                    if [ "$confirm" -eq 0 ]; then
-                        rm -f "$HISTORY_FILE"
-                        "$INFOPANEL" --title "$GP_HISTORY_TITLE" \
-                            --message "$GP_HISTORY_CLEAR_DONE" --auto
-                        return
-                    fi
-                    ;;
+            _ch=$?
+            case "$_ch" in
+                0)  _page=$(( _page - 1 )); [ "$_page" -lt 1 ] && _page="$_pages" ;;
+                1)  _page=$(( _page + 1 )); [ "$_page" -gt "$_pages" ] && _page=1 ;;
+                2)  _confirm_clear_history ;;
                 3|255) return ;;
             esac
         else
-            case "$choice" in
-                0)  # Clear
-                    "$PROMPT" -t "$GP_HISTORY_TITLE" \
-                        -m "$GP_HISTORY_CLEAR_CONFIRM" \
-                        "$GP_YES" "$GP_NO"
-                    local confirm=$?
-                    if [ "$confirm" -eq 0 ]; then
-                        rm -f "$HISTORY_FILE"
-                        "$INFOPANEL" --title "$GP_HISTORY_TITLE" \
-                            --message "$GP_HISTORY_CLEAR_DONE" --auto
-                        return
-                    fi
-                    ;;
+            "$PROMPT" -t "$GP_HISTORY_TITLE" \
+                -m "$_msg" \
+                "$GP_HISTORY_CLEAR" "$GP_BACK"
+            _ch=$?
+            case "$_ch" in
+                0) _confirm_clear_history ;;
                 1|255) return ;;
             esac
         fi
     done
+}
+
+_confirm_clear_history() {
+    "$PROMPT" -t "$GP_HISTORY_TITLE" -m "$GP_HISTORY_CLEAR_CONFIRM" \
+        "$GP_YES" "$GP_NO"
+    if [ $? -eq 0 ]; then
+        rm -f "$HISTORY_FILE"
+        "$INFOPANEL" --title "$GP_HISTORY_TITLE" --message "$GP_HISTORY_CLEAR_DONE" --auto
+        return 1  # signal caller to exit history view
+    fi
+    return 0
 }
 
 # ============================================================
@@ -544,23 +461,21 @@ ui_main_menu() {
     while true; do
         load_config
 
-        local status_str
         if [ "$GP_ENABLED_STATE" -eq 1 ]; then
-            status_str="$GP_STATUS_ON"
+            _status="$GP_STATUS_ON"
         else
-            status_str="$GP_STATUS_OFF"
+            _status="$GP_STATUS_OFF"
         fi
-        local time_str
-        time_str=$(format_time "$GP_TIME_REMAINING")
+        _time_str=$(format_time "$GP_TIMER_SECS")
 
         "$PROMPT" -t "$GP_APP_NAME" \
-            -m "$GP_STATUS: $status_str  |  $GP_TIME_REMAINING: $time_str" \
+            -m "$GP_STATUS: $_status  |  $GP_TIME_REMAINING: $_time_str" \
             "$GP_MENU_SETTINGS" \
             "$GP_MENU_STATS" \
             "$GP_MENU_HISTORY" \
             "$GP_MENU_ABOUT"
-        local choice=$?
-        case "$choice" in
+        _ch=$?
+        case "$_ch" in
             0) ui_settings ;;
             1) ui_stats ;;
             2) ui_history ;;
@@ -577,7 +492,6 @@ ui_main_menu() {
 main() {
     mkdir -p "$DATADIR"
 
-    # Check prompt and infoPanel are available
     if [ ! -x "$PROMPT" ]; then
         echo "[GuardianPlay] ERROR: prompt binary not found at $PROMPT"
         exit 1
@@ -590,7 +504,6 @@ main() {
     load_language
     load_config
 
-    # First-time setup: no PIN configured yet (default 0000 means uninitialized)
     if [ ! -f "$CONFIG" ]; then
         log "First time setup..."
         first_time_setup || exit 0

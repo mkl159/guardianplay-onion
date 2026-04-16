@@ -2,8 +2,8 @@
 # ============================================================
 # GuardianPlay v1.0 — Background Timer Daemon
 # ============================================================
-# This daemon runs in the background from system startup.
-# It tracks play time, shows overlay notifications, and
+# Runs in the background from system startup.
+# Tracks play time, shows overlay notifications,
 # forces game exit when time runs out.
 #
 # Started by: /mnt/SDCARD/.tmp_update/startup/guardianplay.sh
@@ -13,11 +13,12 @@ APPDIR="/mnt/SDCARD/App/ParentalControl"
 SYSDIR="/mnt/SDCARD/.tmp_update"
 DATADIR="$APPDIR/data"
 CONFIG="$DATADIR/config.cfg"
-STATS_FILE="$DATADIR/stats.csv"
+STATS_FILE="$DATADIR/stats.dat"
 HISTORY_FILE="$DATADIR/history.log"
 
 INFOPANEL="$SYSDIR/bin/infoPanel"
 LOGFILE="/tmp/guardianplay_daemon.log"
+PIDFILE="/tmp/guardianplay_daemon.pid"
 
 export LD_LIBRARY_PATH="/lib:/config/lib:/mnt/SDCARD/miyoo/lib:$SYSDIR/lib:$SYSDIR/lib/parasyte"
 export PATH="$SYSDIR/bin:$PATH"
@@ -26,8 +27,7 @@ export PATH="$SYSDIR/bin:$PATH"
 # LOGGING
 # ============================================================
 
-log() { echo "$(date '+%H:%M:%S') [GP-Daemon] $1" >> "$LOGFILE"; }
-log_err() { echo "$(date '+%H:%M:%S') [GP-Daemon][ERROR] $1" >> "$LOGFILE"; }
+log() { echo "$(date '+%H:%M:%S') [GP] $1" >> "$LOGFILE"; }
 
 # ============================================================
 # CONFIG
@@ -35,34 +35,36 @@ log_err() { echo "$(date '+%H:%M:%S') [GP-Daemon][ERROR] $1" >> "$LOGFILE"; }
 
 load_config() {
     if [ -f "$CONFIG" ]; then
-        # shellcheck disable=SC1090
         . "$CONFIG"
     fi
     GP_ENABLED_STATE=$(( ${GP_ENABLED_STATE:-0} + 0 ))
-    GP_TIME_REMAINING=$(( ${GP_TIME_REMAINING:-0} + 0 ))
+    GP_TIMER_SECS=$(( ${GP_TIMER_SECS:-0} + 0 ))
 }
 
-save_time() {
-    if [ -f "$CONFIG" ]; then
-        # Update only GP_TIME_REMAINING in the config file
-        local tmpfile="/tmp/gp_cfg_tmp"
-        grep -v "^GP_TIME_REMAINING=" "$CONFIG" > "$tmpfile"
-        echo "GP_TIME_REMAINING=${GP_TIME_REMAINING}" >> "$tmpfile"
-        mv "$tmpfile" "$CONFIG"
-    fi
+# Atomic-ish save: write to tmp then mv (safe on FAT32)
+save_timer() {
+    _tmp="/tmp/gp_cfg_save"
+    cat > "$_tmp" << SVEOF
+# GuardianPlay Configuration
+GP_ENABLED_STATE=${GP_ENABLED_STATE}
+GP_PIN=${GP_PIN}
+GP_TIMER_SECS=${GP_TIMER_SECS}
+SVEOF
+    mv "$_tmp" "$CONFIG"
 }
 
 # Load language for overlay messages
 load_lang() {
-    local sys_lang="en"
+    _raw="en"
     if [ -f "/mnt/SDCARD/system.json" ]; then
-        sys_lang=$(grep -o '"language"[[:space:]]*:[[:space:]]*"[^"]*"' \
+        _raw=$(grep -o '"language"[[:space:]]*:[[:space:]]*"[^"]*"' \
             /mnt/SDCARD/system.json | sed 's/.*"\([^"]*\)"/\1/' | head -1)
     fi
-    case "$sys_lang" in
-        fr|french|FR) . "$APPDIR/lang/fr.sh" ;;
-        es|spanish|ES) . "$APPDIR/lang/es.sh" ;;
-        *) . "$APPDIR/lang/en.sh" ;;
+    _lower=$(echo "$_raw" | tr 'A-Z' 'a-z')
+    case "$_lower" in
+        fr*) . "$APPDIR/lang/fr.sh" ;;
+        es*) . "$APPDIR/lang/es.sh" ;;
+        *)   . "$APPDIR/lang/en.sh" ;;
     esac
 }
 
@@ -70,32 +72,33 @@ load_lang() {
 # GAME STATE DETECTION
 # ============================================================
 
-# Returns 0 (true) if RetroArch or a game process is running
+# Returns 0 (true) if any game emulator is running
 is_game_running() {
+    # RetroArch (most systems)
     pgrep -x retroarch > /dev/null 2>&1 && return 0
+    # RetroArch 32-bit (Miyoo Mini)
     pgrep -x ra32 > /dev/null 2>&1 && return 0
+    # DraStic (Nintendo DS)
+    pgrep -x drastic > /dev/null 2>&1 && return 0
+    # PPSSPP (PSP)
+    pgrep -x PPSSPPSDL > /dev/null 2>&1 && return 0
     return 1
 }
 
-# Get current ROM path from cmd_to_run.sh
-get_rom_path() {
-    local cmd_file="$SYSDIR/cmd_to_run.sh"
-    if [ -f "$cmd_file" ]; then
-        # Extract the last quoted argument (the rom path)
-        local rompath
-        rompath=$(cat "$cmd_file" | awk '{ st = index($0,"\" \""); print substr($0,st+3,length($0)-st-3)}' | tr -d '"')
-        echo "$rompath"
-    fi
-}
-
-# Get game name from ROM path (filename without extension)
+# Get game name from cmd_to_run.sh (best effort)
 get_game_name() {
-    local rompath="$1"
-    if [ -n "$rompath" ]; then
-        basename "$rompath" | sed 's/\.[^.]*$//'
-    else
-        echo "Unknown"
+    _cmd_file="$SYSDIR/cmd_to_run.sh"
+    if [ -f "$_cmd_file" ]; then
+        # Extract the last quoted argument (= the ROM path)
+        _rompath=$(sed 's/.*"\([^"]*\)"[[:space:]]*$/\1/' "$_cmd_file" 2>/dev/null)
+        if [ -n "$_rompath" ]; then
+            # Return filename without extension
+            _base=$(basename "$_rompath")
+            echo "${_base%.*}"
+            return
+        fi
     fi
+    echo "Unknown"
 }
 
 # ============================================================
@@ -103,27 +106,30 @@ get_game_name() {
 # ============================================================
 
 show_overlay() {
-    local title="$1"
-    local msg="$2"
-    "$INFOPANEL" --title "$title" --message "$msg" --auto &
+    "$INFOPANEL" --title "$1" --message "$2" --auto &
 }
 
-# Kill the currently running game and return to MainUI
+# Kill the currently running game — use same signal pattern as Onion OS
 force_stop_game() {
     log "Time is up! Force stopping game..."
     show_overlay "$GP_NOTIF_GAMEOVER_TITLE" "$GP_NOTIF_GAMEOVER_MSG"
     sleep 3
 
-    # Kill RetroArch
-    killall -SIGTERM retroarch 2>/dev/null
-    killall -SIGTERM ra32 2>/dev/null
+    # Graceful first (same pattern as Onion runtime.sh)
+    killall retroarch 2>/dev/null
+    killall ra32 2>/dev/null
+    killall drastic 2>/dev/null
+    killall PPSSPPSDL 2>/dev/null
     sleep 2
-    killall -SIGKILL retroarch 2>/dev/null
-    killall -SIGKILL ra32 2>/dev/null
+
+    # Force kill if still alive
+    killall -9 retroarch 2>/dev/null
+    killall -9 ra32 2>/dev/null
+    killall -9 drastic 2>/dev/null
+    killall -9 PPSSPPSDL 2>/dev/null
 
     # Remove cmd_to_run.sh so Onion goes back to MainUI
     rm -f "$SYSDIR/cmd_to_run.sh" 2>/dev/null
-
     log "Game forcibly stopped."
 }
 
@@ -132,43 +138,40 @@ force_stop_game() {
 # ============================================================
 
 record_session_start() {
-    local game="$1"
-    local ts
-    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    _game="$1"
+    _ts=$(date '+%Y-%m-%d %H:%M:%S')
     mkdir -p "$DATADIR"
-    echo "${ts}|${game}" >> "$HISTORY_FILE"
-    log "Session started: $game"
+    echo "${_ts}|${_game}" >> "$HISTORY_FILE"
+    log "Session started: $_game"
 
     # Rotate if history > 500 MB
-    local size
-    size=$(wc -c < "$HISTORY_FILE" 2>/dev/null || echo 0)
-    if [ "$size" -gt 524288000 ]; then
-        local tmp="/tmp/gp_history_tmp"
-        tail -500 "$HISTORY_FILE" > "$tmp" && mv "$tmp" "$HISTORY_FILE"
-        log "History rotated (was ${size} bytes)"
+    _sz=$(wc -c < "$HISTORY_FILE" 2>/dev/null || echo 0)
+    if [ "$_sz" -gt 524288000 ]; then
+        tail -500 "$HISTORY_FILE" > /tmp/gp_hist_tmp && mv /tmp/gp_hist_tmp "$HISTORY_FILE"
+        log "History rotated (was ${_sz} bytes)"
     fi
 }
 
 record_session_stop() {
-    local game="$1"
-    local session_secs="$2"
-    [ "$session_secs" -le 0 ] && return
+    _game="$1"
+    _sess="$2"
+    [ "$_sess" -le 0 ] 2>/dev/null && return
 
     mkdir -p "$DATADIR"
     touch "$STATS_FILE"
 
-    if grep -q "^${game}," "$STATS_FILE" 2>/dev/null; then
-        local current
-        current=$(grep "^${game}," "$STATS_FILE" | cut -d',' -f2)
-        local new_total=$(( current + session_secs ))
-        local tmpfile="/tmp/gp_stats_tmp"
-        grep -v "^${game}," "$STATS_FILE" > "$tmpfile"
-        echo "${game},${new_total}" >> "$tmpfile"
-        mv "$tmpfile" "$STATS_FILE"
+    # Use grep -F for fixed string (safe with special chars in ROM names)
+    if grep -Fq "${_game}|" "$STATS_FILE" 2>/dev/null; then
+        _cur=$(grep -F "${_game}|" "$STATS_FILE" | head -1 | cut -d'|' -f2)
+        _cur=$(( ${_cur:-0} + 0 ))
+        _new=$(( _cur + _sess ))
+        grep -Fv "${_game}|" "$STATS_FILE" > /tmp/gp_stats_tmp
+        echo "${_game}|${_new}" >> /tmp/gp_stats_tmp
+        mv /tmp/gp_stats_tmp "$STATS_FILE"
     else
-        echo "${game},${session_secs}" >> "$STATS_FILE"
+        echo "${_game}|${_sess}" >> "$STATS_FILE"
     fi
-    log "Session recorded: $game — ${session_secs}s (new total)"
+    log "Session recorded: $_game - ${_sess}s"
 }
 
 # ============================================================
@@ -177,101 +180,94 @@ record_session_stop() {
 
 main() {
     # Prevent double-start
-    local pid_file="/tmp/guardianplay_daemon.pid"
-    if [ -f "$pid_file" ]; then
-        local old_pid
-        old_pid=$(cat "$pid_file")
-        if kill -0 "$old_pid" 2>/dev/null; then
-            log "Daemon already running (PID $old_pid). Exiting."
+    if [ -f "$PIDFILE" ]; then
+        _old=$(cat "$PIDFILE")
+        if kill -0 "$_old" 2>/dev/null; then
+            log "Daemon already running (PID $_old). Exiting."
             exit 0
         fi
     fi
-    echo $$ > "$pid_file"
+    echo $$ > "$PIDFILE"
 
     log "GuardianPlay Daemon started (PID $$)"
 
     load_lang
     load_config
 
-    local was_game_running=0
-    local session_start_secs=0
-    local current_rom=""
-    local current_game=""
-
-    # Notification sentinels (reset each game session)
-    local notif_10=0
-    local notif_5=0
-    local notif_1=0
+    _was_running=0
+    _sess_start=0
+    _game=""
+    _notif_10=0
+    _notif_5=0
+    _notif_1=0
+    _save_counter=0
 
     while true; do
-        # Reload config if it changed (e.g., UI updated time or toggled state)
+        # Reload config if UI changed it
         if [ -f /tmp/gp_config_changed ]; then
             rm -f /tmp/gp_config_changed
             load_config
-            log "Config reloaded. Enabled=$GP_ENABLED_STATE Time=${GP_TIME_REMAINING}s"
+            log "Config reloaded. Enabled=$GP_ENABLED_STATE Timer=${GP_TIMER_SECS}s"
         fi
 
         # --- GAME STATE MACHINE ---
         if is_game_running; then
-            if [ "$was_game_running" -eq 0 ]; then
-                # Game just STARTED
-                was_game_running=1
-                session_start_secs=$(date +%s)
-                current_rom=$(get_rom_path)
-                current_game=$(get_game_name "$current_rom")
-                notif_10=0
-                notif_5=0
-                notif_1=0
-                log "Game started: $current_game"
-                record_session_start "$current_game"
+            if [ "$_was_running" -eq 0 ]; then
+                # == GAME JUST STARTED ==
+                _was_running=1
+                _sess_start=$(date +%s)
+                _game=$(get_game_name)
+                _notif_10=0
+                _notif_5=0
+                _notif_1=0
+                _save_counter=0
+                log "Game started: $_game"
+                record_session_start "$_game"
             fi
 
-            # Only count down if parental control is enabled AND no parent bypass
-            # /tmp/gp_bypass_active is set by parental_hook.sh when correct PIN entered
+            # Only count down if parental enabled AND no parent bypass
             if [ "$GP_ENABLED_STATE" -eq 1 ] && [ ! -f /tmp/gp_bypass_active ]; then
-                # Decrement 1 second
-                GP_TIME_REMAINING=$(( GP_TIME_REMAINING - 1 ))
-                [ "$GP_TIME_REMAINING" -lt 0 ] && GP_TIME_REMAINING=0
+                GP_TIMER_SECS=$(( GP_TIMER_SECS - 1 ))
+                [ "$GP_TIMER_SECS" -lt 0 ] && GP_TIMER_SECS=0
 
-                # Save time every 10 seconds to SD card
-                now=$(date +%s)
-                elapsed=$(( now - session_start_secs ))
-                if [ $(( elapsed % 10 )) -eq 0 ]; then
-                    save_time
+                # Save to SD every 10 seconds (reduce flash wear)
+                _save_counter=$(( _save_counter + 1 ))
+                if [ "$_save_counter" -ge 10 ]; then
+                    _save_counter=0
+                    save_timer
                 fi
 
-                mins_remaining=$(( GP_TIME_REMAINING / 60 ))
+                _mins=$(( GP_TIMER_SECS / 60 ))
 
                 # --- Notifications ---
-                if [ "$mins_remaining" -le 10 ] && [ "$mins_remaining" -gt 5 ] && [ "$notif_10" -eq 0 ]; then
-                    notif_10=1
+                if [ "$_mins" -le 10 ] && [ "$_mins" -gt 5 ] && [ "$_notif_10" -eq 0 ]; then
+                    _notif_10=1
                     show_overlay "$GP_APP_NAME" "$GP_NOTIF_10MIN"
                     log "Notification: 10 min warning"
                 fi
 
-                if [ "$mins_remaining" -le 5 ] && [ "$mins_remaining" -gt 1 ] && [ "$notif_5" -eq 0 ]; then
-                    notif_5=1
+                if [ "$_mins" -le 5 ] && [ "$_mins" -gt 1 ] && [ "$_notif_5" -eq 0 ]; then
+                    _notif_5=1
                     show_overlay "$GP_APP_NAME" "$GP_NOTIF_5MIN"
                     log "Notification: 5 min warning"
                 fi
 
-                if [ "$mins_remaining" -le 1 ] && [ "$GP_TIME_REMAINING" -gt 0 ] && [ "$notif_1" -eq 0 ]; then
-                    notif_1=1
+                if [ "$_mins" -le 1 ] && [ "$GP_TIMER_SECS" -gt 0 ] && [ "$_notif_1" -eq 0 ]; then
+                    _notif_1=1
                     show_overlay "$GP_APP_NAME" "$GP_NOTIF_1MIN"
                     log "Notification: 1 min warning"
                 fi
 
-                # --- Time Up: Kill game ---
-                if [ "$GP_TIME_REMAINING" -le 0 ]; then
-                    log "Time is up for game: $current_game"
-                    session_secs=$(( $(date +%s) - session_start_secs ))
-                    record_session_stop "$current_game" "$session_secs"
-                    GP_TIME_REMAINING=0
-                    save_time
+                # --- TIME UP: KILL GAME ---
+                if [ "$GP_TIMER_SECS" -le 0 ]; then
+                    log "Time is up for: $_game"
+                    _elapsed=$(( $(date +%s) - _sess_start ))
+                    record_session_stop "$_game" "$_elapsed"
+                    GP_TIMER_SECS=0
+                    save_timer
                     force_stop_game
-                    was_game_running=0
-                    current_rom=""
-                    current_game=""
+                    _was_running=0
+                    _game=""
                     rm -f /tmp/gp_bypass_active
                     sleep 3
                     continue
@@ -279,20 +275,17 @@ main() {
             fi
 
         else
-            if [ "$was_game_running" -eq 1 ]; then
-                # Game just STOPPED
-                was_game_running=0
-                session_secs=$(( $(date +%s) - session_start_secs ))
-                log "Game stopped: $current_game (session: ${session_secs}s)"
-                record_session_stop "$current_game" "$session_secs"
-                # Save remaining time
-                save_time
-                current_rom=""
-                current_game=""
-                notif_10=0
-                notif_5=0
-                notif_1=0
-                # Clear parent bypass flag for next game
+            if [ "$_was_running" -eq 1 ]; then
+                # == GAME JUST STOPPED ==
+                _was_running=0
+                _elapsed=$(( $(date +%s) - _sess_start ))
+                log "Game stopped: $_game (session: ${_elapsed}s)"
+                record_session_stop "$_game" "$_elapsed"
+                save_timer
+                _game=""
+                _notif_10=0
+                _notif_5=0
+                _notif_1=0
                 rm -f /tmp/gp_bypass_active
             fi
         fi
@@ -301,7 +294,12 @@ main() {
     done
 }
 
-# Trap SIGTERM for clean shutdown
-trap 'log "Daemon stopped."; rm -f /tmp/guardianplay_daemon.pid; exit 0' TERM INT
+# Trap for clean shutdown
+cleanup() {
+    log "Daemon stopped."
+    rm -f "$PIDFILE"
+    exit 0
+}
+trap cleanup TERM INT
 
 main "$@"

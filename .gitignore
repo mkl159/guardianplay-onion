@@ -5,7 +5,7 @@
 
 # User data files (never commit user data)
 src/App/ParentalControl/data/config.cfg
-src/App/ParentalControl/data/stats.csv
+src/App/ParentalControl/data/stats.dat
 src/App/ParentalControl/data/history.log
 
 # Keep the data directory in the repo

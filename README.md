@@ -75,7 +75,9 @@ Parents can:
 | ➕ **Gestion du temps** | Ajout / retrait de +10min, +1h, +2h, +3h, -10min, -1h, -2h, remise à zéro. |
 | 📊 **Statistiques** | Temps cumulé par jeu, tri par les plus joués. |
 | 📋 **Historique** | 50 derniers lancements avec date/heure, pagination. Limite 500 Mo auto-rotation. |
-| 🌍 **3 langues** | Français 🇫🇷, Anglais 🇬🇧, Espagnol 🇪🇸 — détection automatique via Onion OS. |
+| 🔑 **PIN Bypass au lancement** | À chaque lancement de ROM, le parent peut entrer le PIN pour jouer **sans limite de temps** (mode bypass). L'enfant appuie sur B pour jouer avec le timer. |
+| 🎮 **Multi-émulateurs** | Supporte RetroArch, ra32, DraStic (NDS), PPSSPP (PSP). |
+| 🌍 **3 langues** | Français, Anglais, Espagnol — détection automatique via Onion OS. |
 
 ---
 
@@ -113,7 +115,7 @@ guardianplay-onion/
 │           │
 │           └── 📂 data/            ← Créé automatiquement au 1er lancement
 │               ├── 📄 config.cfg   ← PIN + état + temps restant
-│               ├── 📄 stats.csv    ← Statistiques par jeu
+│               ├── 📄 stats.dat    ← Statistiques par jeu
 │               └── 📄 history.log  ← Historique des lancements
 │
 └── 📂 docs/
@@ -317,8 +319,8 @@ Boot
   │  [Game is running]
   │
   └─ parental_daemon.sh (polling every 1s)
-       ├─ Détecte pgrep retroarch/ra32
-       ├─ Décrémente GP_TIME_REMAINING
+       ├─ Détecte pgrep retroarch/ra32/drastic/PPSSPPSDL
+       ├─ Décrémente GP_TIMER_SECS
        ├─ @10min → infoPanel warning
        ├─ @5min  → infoPanel warning
        ├─ @1min  → infoPanel critical
@@ -355,16 +357,16 @@ Tous les fichiers sont dans `/mnt/SDCARD/App/ParentalControl/data/` :
 ```sh
 GP_ENABLED_STATE=1        # 0=désactivé, 1=activé
 GP_PIN=1234               # PIN en clair (lisible depuis PC)
-GP_TIME_REMAINING=3600    # Secondes restantes
+GP_TIMER_SECS=3600        # Secondes restantes
 ```
 
-### `stats.csv`
-```csv
-Super Mario World,8100
-Sonic the Hedgehog,9600
-Pokemon Red,6900
+### `stats.dat`
 ```
-Format : `nom_du_jeu,secondes_totales`
+Super Mario World|8100
+Sonic the Hedgehog|9600
+Pokemon Red|6900
+```
+Format : `nom_du_jeu|secondes_totales` (séparateur pipe `|`)
 
 ### `history.log`
 ```

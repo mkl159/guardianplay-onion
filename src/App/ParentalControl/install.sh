@@ -122,6 +122,7 @@ chmod +x "$APPDIR/launch.sh"
 chmod +x "$APPDIR/parental_ui.sh"
 chmod +x "$APPDIR/parental_daemon.sh"
 chmod +x "$APPDIR/parental_hook.sh"
+chmod +x "$APPDIR/install.sh"
 chmod +x "$APPDIR/uninstall.sh"
 
 # ============================================================
@@ -134,7 +135,7 @@ if [ ! -f "$APPDIR/data/config.cfg" ]; then
 # GuardianPlay Configuration
 GP_ENABLED_STATE=0
 GP_PIN=0000
-GP_TIME_REMAINING=3600
+GP_TIMER_SECS=3600
 CFG_EOF
     log "Default config created."
 fi
