@@ -11,7 +11,7 @@
 [![Miyoo Mini](https://img.shields.io/badge/Miyoo-Mini%20%2F%20Mini%2B-green?style=for-the-badge)](https://miyoo.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-1.0.0-orange?style=for-the-badge)]()
-[![Languages](https://img.shields.io/badge/Lang-FR%20%7C%20EN%20%7C%20ES-purple?style=for-the-badge)]()
+[![Languages](https://img.shields.io/badge/Lang-FR%20%7C%20EN%20%7C%20ES%20%7C%20DE%20%7C%20IT%20%7C%20PT-purple?style=for-the-badge)]()
 
 </div>
 
@@ -77,7 +77,7 @@ Parents can:
 | 📋 **Historique** | 50 derniers lancements avec date/heure, pagination. Limite 500 Mo auto-rotation. |
 | 🔑 **PIN Bypass au lancement** | À chaque lancement de ROM, le parent peut entrer le PIN pour jouer **sans limite de temps** (mode bypass). L'enfant appuie sur B pour jouer avec le timer. |
 | 🎮 **Multi-émulateurs** | Supporte RetroArch, ra32, DraStic (NDS), PPSSPP (PSP). |
-| 🌍 **3 langues** | Français, Anglais, Espagnol — détection automatique via Onion OS. |
+| 🌍 **6 langues** | Français, Anglais, Espagnol, Allemand, Italien, Portugais — détection automatique via Onion OS. |
 
 ---
 
@@ -107,7 +107,10 @@ guardianplay-onion/
 │           ├── 📂 lang/
 │           │   ├── 📄 fr.sh        ← Traductions françaises
 │           │   ├── 📄 en.sh        ← Traductions anglaises
-│           │   └── 📄 es.sh        ← Traductions espagnoles
+│           │   ├── 📄 es.sh        ← Traductions espagnoles
+│           │   ├── 📄 de.sh        ← Traductions allemandes
+│           │   ├── 📄 it.sh        ← Traductions italiennes
+│           │   └── 📄 pt.sh        ← Traductions portugaises
 │           │
 │           ├── 📂 res/
 │           │   ├── 🎨 guardianplay.png   ← Icône app (96x96 PNG)
@@ -346,6 +349,9 @@ GuardianPlay détecte automatiquement la langue configurée dans Onion OS (`syst
 | 🇫🇷 Français | `fr` / `french` | `lang/fr.sh` |
 | 🇬🇧 English | `en` / `english` | `lang/en.sh` |
 | 🇪🇸 Español | `es` / `spanish` | `lang/es.sh` |
+| 🇩🇪 Deutsch | `de` / `german` | `lang/de.sh` |
+| 🇮🇹 Italiano | `it` / `italian` | `lang/it.sh` |
+| 🇧🇷 Português | `pt` / `portuguese` | `lang/pt.sh` |
 
 ---
 
@@ -432,7 +438,7 @@ Les contributions sont les bienvenues !
 5. Ouvrez une Pull Request
 
 ### Idées pour contributions futures
-- [ ] 🌍 Support de langues supplémentaires (DE, IT, PT...)
+- [x] 🌍 Support de langues supplémentaires (DE, IT, PT)
 - [ ] 📅 Plages horaires autorisées (ex: jeu autorisé uniquement de 16h à 18h)
 - [ ] 👤 Profils multi-enfants
 - [ ] 📱 Intégration Wi-Fi (notification sur téléphone parent)

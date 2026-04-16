@@ -64,6 +64,9 @@ load_lang() {
     case "$_lower" in
         fr*) . "$APPDIR/lang/fr.sh" ;;
         es*) . "$APPDIR/lang/es.sh" ;;
+        de*) . "$APPDIR/lang/de.sh" ;;
+        it*) . "$APPDIR/lang/it.sh" ;;
+        pt*) . "$APPDIR/lang/pt.sh" ;;
         *)   . "$APPDIR/lang/en.sh" ;;
     esac
 }

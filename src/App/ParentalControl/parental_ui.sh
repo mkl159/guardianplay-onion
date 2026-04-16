@@ -49,6 +49,9 @@ load_language() {
     case "$_lang" in
         fr*) . "$LANGDIR/fr.sh" ;;
         es*) . "$LANGDIR/es.sh" ;;
+        de*) . "$LANGDIR/de.sh" ;;
+        it*) . "$LANGDIR/it.sh" ;;
+        pt*) . "$LANGDIR/pt.sh" ;;
         *)   . "$LANGDIR/en.sh" ;;
     esac
     log "Language loaded: $GP_LANG"

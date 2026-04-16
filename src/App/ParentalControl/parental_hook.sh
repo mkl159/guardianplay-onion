@@ -67,6 +67,30 @@ load_lang() {
             L_BLOCKED_TITLE="Tiempo de juego agotado"
             L_BLOCKED_MSG="No queda tiempo de juego.\nPida permiso a un padre."
             ;;
+        de*)
+            L_TITLE="GuardianPlay"
+            L_MSG="Eltern-PIN eingeben\num ohne Zeitlimit zu spielen.\n\nB druecken fuer normales Spielen"
+            L_DIGIT="Ziffer %d von 4"
+            L_BYPASS_OK="Elternmodus aktiv!\nUnbegrenzte Spielzeit."
+            L_BLOCKED_TITLE="Spielzeit abgelaufen"
+            L_BLOCKED_MSG="Keine Spielzeit mehr verfuegbar.\nFragen Sie einen Elternteil."
+            ;;
+        it*)
+            L_TITLE="GuardianPlay"
+            L_MSG="Inserire il PIN genitore\nper giocare senza limiti.\n\nPremere B per giocare normalmente"
+            L_DIGIT="Cifra %d di 4"
+            L_BYPASS_OK="Modalita genitore attiva!\nTempo di gioco illimitato."
+            L_BLOCKED_TITLE="Tempo di gioco esaurito"
+            L_BLOCKED_MSG="Nessun tempo di gioco disponibile.\nChiedere il permesso a un genitore."
+            ;;
+        pt*)
+            L_TITLE="GuardianPlay"
+            L_MSG="Introduza o PIN parental\npara jogar sem limite de tempo.\n\nPrima B para jogar normalmente"
+            L_DIGIT="Digito %d de 4"
+            L_BYPASS_OK="Modo parental ativo!\nTempo de jogo ilimitado."
+            L_BLOCKED_TITLE="Tempo de jogo esgotado"
+            L_BLOCKED_MSG="Sem tempo de jogo disponivel.\nPeca autorizacao a um adulto."
+            ;;
         *)
             L_TITLE="GuardianPlay"
             L_MSG="Enter parent PIN\nto play with no time limit.\n\nPress B to play with timer"
