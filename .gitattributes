@@ -1,0 +1,13 @@
+# GuardianPlay — Git line ending config
+# Shell scripts MUST use LF (Unix) — CRLF breaks sh on Onion OS!
+*.sh   text eol=lf
+*.cfg  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.py   text eol=lf
+*.csv  text eol=lf
+*.log  text eol=lf
+
+# Binaries
+*.png  binary

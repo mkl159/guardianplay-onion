@@ -1,0 +1,67 @@
+Cahier des Charges : Module de Contrôle Parental
+pour Onion OS
+1. Présentation du projet
+L'objectif est de développer un add-on (application tierce) pour le système Onion OS (utilisé sur
+Miyoo Mini et consoles similaires) permettant aux parents d'encadrer et de limiter le temps de
+jeu des enfants. Le module doit être intuitif, esthétiquement soigné et robuste (persistance des
+données au redémarrage).
+2. Spécifications Fonctionnelles
+2.1. Accès et Sécurité
+● Code PIN : Un code à 4 chiffres est requis pour accéder au menu de configuration et
+pour désactiver la fonction.
+● Initialisation : Lors de la toute première activation, l'utilisateur est invité à définir ce
+code PIN.
+● Récupération : Le code PIN est stocké en clair (ou format lisible) dans un fichier texte
+sur la carte SD. Cela permet au parent de le retrouver ou de le modifier depuis un
+ordinateur en cas d'oubli.
+● Désactivation : La désactivation du contrôle parental ne peut se faire qu'après saisie du
+code PIN.
+2.2. Gestion du Temps de Jeu
+● Décompte intelligent : Le temps ne se décompte que lorsqu'une ROM est lancée. Le
+temps passé dans les menus d'Onion OS n'est pas décompté.
+● Persistance : Le temps restant doit être sauvegardé "en dur" sur la carte SD. Si la
+console est éteinte et rallumée, le temps restant doit être identique à celui avant
+l'extinction.
+● Blocage : Si le temps de jeu est épuisé (0 min), le lancement de toute nouvelle ROM est
+bloqué. Un message s'affiche : "Plus de temps de jeu disponible. Demandez
+l'autorisation à un parent."
+2.3. Notifications en jeu (Pop-ups)
+Des messages d'alerte doivent apparaître par-dessus le jeu (Overlay) :
+● À 10 minutes restantes : Pop-up d'avertissement (durée 10 secondes).
+
+● À 5 minutes restantes : Pop-up d'avertissement (durée 10 secondes).
+● À 1 minute restante : Pop-up critique de couleur rouge : "Plus qu'une minute de jeu !"
+(durée 10 secondes).
+● À 0 minute : Fermeture automatique du jeu et retour forcé au menu principal d'Onion
+OS.
+3. Interface Utilisateur (UI)
+3.1. Visuels
+● Icône : Une icône dédiée doit être créée pour identifier l'add-on dans le menu "Apps"
+d'Onion OS.
+● Style : L'interface doit être "belle, attrayante et facile à comprendre" pour un utilisateur
+non technique.
+3.2. Structure du Menu (3 Onglets)
+1. Onglet Principal (Paramètres) :
+● Activer / Désactiver le contrôle parental (PIN requis pour désactiver).
+● Modifier le code PIN.
+● Réglage rapide du temps : Boutons pour ajouter ou enlever du temps (+10 min,
++60 min, +2h, +3h / -10 min, -60 min, -2h).
+
+2. Onglet Statistiques :
+● Affichage du temps cumulé passé sur chaque jeu (ex: "Super Mario World : 2h
+15min").
+3. Onglet Historique :
+● Liste des 50 derniers lancements de jeux (Nom du jeu + Date/Heure).
+
+4. Spécifications Techniques
+● Langues supportées : Français, Anglais, Espagnol.
+● Fichiers de log : Le fichier d'historique ne doit jamais dépasser 500 Mo. Un système de
+rotation (suppression des entrées les plus anciennes) doit être mis en place pour
+garantir cette limite.
+● Compatibilité : Le module doit s'intégrer proprement dans l'architecture d'Onion OS
+(scripts MainUI, scripts de lancement EmuHawk ou similaires).
+5. Livrables attendus
+● Code source complet commenté.
+● Icône au format attendu par Onion OS (.png).
+● Fichiers de traduction (Lang files).
+● Instructions d'installation (dossier /App/ParentalControl).

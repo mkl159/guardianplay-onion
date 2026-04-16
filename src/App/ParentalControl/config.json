@@ -1,0 +1,6 @@
+{
+    "label": "GuardianPlay",
+    "icon": "../../Icons/Default/app/guardianplay.png",
+    "launch": "launch.sh",
+    "description": "Parental Control — Manage your children's play time"
+}

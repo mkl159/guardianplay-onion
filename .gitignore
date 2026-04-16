@@ -1,0 +1,33 @@
+# GuardianPlay — .gitignore
+
+# Claude Code local settings
+.claude/
+
+# User data files (never commit user data)
+src/App/ParentalControl/data/config.cfg
+src/App/ParentalControl/data/stats.csv
+src/App/ParentalControl/data/history.log
+
+# Keep the data directory in the repo
+!src/App/ParentalControl/data/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temp files
+*.tmp
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
