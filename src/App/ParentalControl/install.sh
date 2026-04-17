@@ -152,10 +152,11 @@ log "  - Hook injected into runtime.sh"
 log "  - Daemon startup: $STARTUP_SCRIPT"
 log "  - App location: $APPDIR"
 log ""
+log "  Default PIN code : 0000"
 log "  NEXT STEPS:"
 log "  1. Reboot your Miyoo Mini"
 log "  2. Open GuardianPlay from the Apps menu"
-log "  3. Set your PIN and configure play time"
+log "  3. Change your PIN and configure play time"
 log "================================================"
 
 exit 0
