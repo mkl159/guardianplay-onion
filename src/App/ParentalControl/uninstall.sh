@@ -82,10 +82,4 @@ log "  Your stats and history data are preserved."
 log "  Reboot your device to complete uninstallation."
 log "================================================"
 
-if [ -x "$INFOPANEL" ]; then
-    "$INFOPANEL" --title "GuardianPlay Uninstalled" \
-        --message "Uninstall complete.\nReboot to finalize.\nYour data has been preserved." \
-        --auto
-fi
-
 exit 0

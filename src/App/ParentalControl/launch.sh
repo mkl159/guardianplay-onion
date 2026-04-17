@@ -20,7 +20,7 @@ if [ -f "$_pidfile" ]; then
 fi
 if [ "$_daemon_running" -eq 0 ]; then
     echo "[GuardianPlay] Starting daemon..."
-    sh ./parental_daemon.sh &
+    sh ./parental_daemon.sh > /dev/null 2>&1 &
 fi
 
 # Launch the main UI

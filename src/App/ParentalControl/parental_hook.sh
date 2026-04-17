@@ -133,7 +133,9 @@ if [ -f "$_pidfile" ]; then
     _pid=$(cat "$_pidfile")
     kill -0 "$_pid" 2>/dev/null && _running=1
 fi
-[ "$_running" -eq 0 ] && sh "$APPDIR/parental_daemon.sh" &
+if [ "$_running" -eq 0 ]; then
+    sh "$APPDIR/parental_daemon.sh" > /dev/null 2>&1 &
+fi
 
 # Check if prompt binary is available
 if [ ! -x "$PROMPT" ]; then
