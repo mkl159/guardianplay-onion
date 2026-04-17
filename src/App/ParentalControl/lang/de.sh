@@ -54,6 +54,7 @@ GP_PIN_INIT_MSG="Erstellen Sie einen 4-stelligen PIN\nfuer die Kindersicherung."
 
 # --- Zeit ---
 GP_TIME_TITLE="Zeitverwaltung"
+GP_ADD_1="+ 1 Minute"
 GP_ADD_10="+ 10 Minuten"
 GP_ADD_60="+ 1 Stunde"
 GP_ADD_2H="+ 2 Stunden"

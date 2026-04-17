@@ -56,6 +56,7 @@ GP_PIN_INIT_MSG="Create a 4-digit PIN code\nto secure parental control."
 
 # --- Time ---
 GP_TIME_TITLE="Time Management"
+GP_ADD_1="+ 1 minute"
 GP_ADD_10="+ 10 minutes"
 GP_ADD_60="+ 1 hour"
 GP_ADD_2H="+ 2 hours"

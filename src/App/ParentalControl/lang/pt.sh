@@ -56,6 +56,7 @@ GP_PIN_INIT_MSG="Crie um codigo PIN de 4 digitos\npara proteger o controlo paren
 
 # --- Tempo ---
 GP_TIME_TITLE="Gestao do tempo"
+GP_ADD_1="+ 1 minuto"
 GP_ADD_10="+ 10 minutos"
 GP_ADD_60="+ 1 hora"
 GP_ADD_2H="+ 2 horas"

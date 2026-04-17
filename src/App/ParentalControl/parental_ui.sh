@@ -243,16 +243,18 @@ ui_add_time() {
     _time_str=$(format_time "$GP_TIMER_SECS")
     "$PROMPT" -t "$GP_TIME_TITLE" \
         -m "$GP_TIME_REMAINING: $_time_str" \
+        "$GP_ADD_1" \
         "$GP_ADD_10" \
         "$GP_ADD_60" \
         "$GP_ADD_2H" \
         "$GP_ADD_3H"
     _ch=$?
     case "$_ch" in
-        0) GP_TIMER_SECS=$(( GP_TIMER_SECS + 600 )) ;;
-        1) GP_TIMER_SECS=$(( GP_TIMER_SECS + 3600 )) ;;
-        2) GP_TIMER_SECS=$(( GP_TIMER_SECS + 7200 )) ;;
-        3) GP_TIMER_SECS=$(( GP_TIMER_SECS + 10800 )) ;;
+        0) GP_TIMER_SECS=$(( GP_TIMER_SECS + 60 )) ;;
+        1) GP_TIMER_SECS=$(( GP_TIMER_SECS + 600 )) ;;
+        2) GP_TIMER_SECS=$(( GP_TIMER_SECS + 3600 )) ;;
+        3) GP_TIMER_SECS=$(( GP_TIMER_SECS + 7200 )) ;;
+        4) GP_TIMER_SECS=$(( GP_TIMER_SECS + 10800 )) ;;
         *) return ;;
     esac
     save_config
@@ -479,7 +481,10 @@ ui_main_menu() {
             "$GP_MENU_ABOUT"
         _ch=$?
         case "$_ch" in
-            0) ui_settings ;;
+            0)  if [ "$GP_ENABLED_STATE" -eq 1 ]; then
+                    verify_pin || continue
+                fi
+                ui_settings ;;
             1) ui_stats ;;
             2) ui_history ;;
             3) ui_about ;;

@@ -62,22 +62,22 @@ log "Backup OK."
 
 log "Patching runtime.sh..."
 
-# Use awk to insert the GuardianPlay hook after the 'playActivity start' line
+# Use awk to insert the GuardianPlay hook BEFORE the 'playActivity start' line
+# so the game never starts if the hook blocks it (exit 1).
 awk '
 /[[:space:]]*playActivity start "\$rompath"/ && !inserted {
-    print
     print "        # === GUARDIANPLAY HOOK ==="
-    print "        # Block game launch if parental time is exhausted"
+    print "        # Check parental control BEFORE starting the game"
     print "        if [ -f \"/mnt/SDCARD/App/ParentalControl/parental_hook.sh\" ]; then"
     print "            /mnt/SDCARD/App/ParentalControl/parental_hook.sh \"$rompath\""
     print "            if [ \$? -ne 0 ]; then"
-    print "                playActivity stop \"$rompath\" 2>/dev/null"
     print "                rm -f \$sysdir/cmd_to_run.sh 2>/dev/null"
     print "                return"
     print "            fi"
     print "        fi"
     print "        # === END GUARDIANPLAY HOOK ==="
     inserted=1
+    print
     next
 }
 { print }
