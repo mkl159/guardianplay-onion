@@ -158,11 +158,4 @@ log "  2. Open GuardianPlay from the Apps menu"
 log "  3. Set your PIN and configure play time"
 log "================================================"
 
-# Show success notification if infoPanel is available
-if [ -x "$INFOPANEL" ]; then
-    "$INFOPANEL" --title "GuardianPlay Installed!" \
-        --message "Installation complete!\nReboot your device to activate." \
-        --auto
-fi
-
 exit 0

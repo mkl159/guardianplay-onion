@@ -126,6 +126,15 @@ allow_with_timer() {
 
 load_lang
 
+# Ensure daemon is running (starts it if the startup script didn't)
+_pidfile="/tmp/guardianplay_daemon.pid"
+_running=0
+if [ -f "$_pidfile" ]; then
+    _pid=$(cat "$_pidfile")
+    kill -0 "$_pid" 2>/dev/null && _running=1
+fi
+[ "$_running" -eq 0 ] && sh "$APPDIR/parental_daemon.sh" &
+
 # Check if prompt binary is available
 if [ ! -x "$PROMPT" ]; then
     # No prompt available — just check time

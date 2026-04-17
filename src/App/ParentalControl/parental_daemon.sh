@@ -76,15 +76,12 @@ load_lang() {
 # ============================================================
 
 # Returns 0 (true) if any game emulator is running
+# Uses pidof (busybox-safe) instead of pgrep -x
 is_game_running() {
-    # RetroArch (most systems)
-    pgrep -x retroarch > /dev/null 2>&1 && return 0
-    # RetroArch 32-bit (Miyoo Mini)
-    pgrep -x ra32 > /dev/null 2>&1 && return 0
-    # DraStic (Nintendo DS)
-    pgrep -x drastic > /dev/null 2>&1 && return 0
-    # PPSSPP (PSP)
-    pgrep -x PPSSPPSDL > /dev/null 2>&1 && return 0
+    pidof retroarch  > /dev/null 2>&1 && return 0
+    pidof ra32       > /dev/null 2>&1 && return 0
+    pidof drastic    > /dev/null 2>&1 && return 0
+    pidof PPSSPPSDL  > /dev/null 2>&1 && return 0
     return 1
 }
 
