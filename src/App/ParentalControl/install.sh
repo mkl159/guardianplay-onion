@@ -124,6 +124,7 @@ chmod +x "$APPDIR/parental_daemon.sh"
 chmod +x "$APPDIR/parental_hook.sh"
 chmod +x "$APPDIR/install.sh"
 chmod +x "$APPDIR/uninstall.sh"
+[ -f "$APPDIR/bin/gp_keypad" ] && chmod +x "$APPDIR/bin/gp_keypad"
 
 # ============================================================
 # STEP 5: Create data directory with default config

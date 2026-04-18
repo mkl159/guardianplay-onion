@@ -25,6 +25,7 @@ STATS_FILE="$APPDIR/data/stats.dat"
 
 PROMPT="$SYSDIR/bin/prompt"
 INFOPANEL="$SYSDIR/bin/infoPanel"
+GP_KEYPAD="$APPDIR/bin/gp_keypad"
 
 # ROM path passed by runtime.sh
 GP_ROM_PATH="${1:-}"
@@ -168,7 +169,7 @@ show_prelaunch_info() {
         _msg="$L_INFO_LEFT $_left"
     fi
 
-    # Show the popup for ~4 seconds, then close it
+    # Show the popup for ~4 seconds, then force-close it
     "$INFOPANEL" --title "$L_INFO_TITLE" --message "$_msg" --persistent > /dev/null 2>&1 &
     _ip_pid=$!
     sleep 4
@@ -221,23 +222,24 @@ if [ ! -x "$PROMPT" ]; then
     exit 0
 fi
 
-# Phone-keypad-style digit prompt: returns 0-9 or sets _cancel=1
+# Ask a single digit — uses gp_keypad if installed, else falls back to prompt.
+# Sets _dval to 0-9 on success, or _cancel=1 when the user cancels.
 ask_digit_hook() {
+    if [ -x "$GP_KEYPAD" ]; then
+        "$GP_KEYPAD" "$L_TITLE" "$1"
+        _rc=$?
+        if [ "$_rc" -ge 10 ]; then _cancel=1; return 0; fi
+        _dval=$_rc
+        return 0
+    fi
     "$PROMPT" -t "$L_TITLE" -m "$1" \
         "1" "2" "3" \
         "4" "5" "6" \
         "7" "8" "9" \
         "0"
     _rc=$?
-    if [ "$_rc" -ge 10 ]; then
-        _cancel=1
-        return 0
-    fi
-    if [ "$_rc" -eq 9 ]; then
-        _dval=0
-    else
-        _dval=$(( _rc + 1 ))
-    fi
+    if [ "$_rc" -ge 10 ]; then _cancel=1; return 0; fi
+    if [ "$_rc" -eq 9 ]; then _dval=0; else _dval=$(( _rc + 1 )); fi
 }
 
 _cancel=0

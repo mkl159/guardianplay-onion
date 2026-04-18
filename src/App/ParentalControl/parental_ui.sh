@@ -17,6 +17,7 @@ HISTORY_FILE="$DATADIR/history.log"
 
 PROMPT="$SYSDIR/bin/prompt"
 INFOPANEL="$SYSDIR/bin/infoPanel"
+GP_KEYPAD="$APPDIR/bin/gp_keypad"
 
 # Maximum history file size (500 MB = 524288000 bytes)
 MAX_HISTORY_BYTES=524288000
@@ -115,22 +116,23 @@ rotate_history() {
 # PIN MANAGEMENT
 # ============================================================
 
-# Ask user to enter a single digit — phone keypad layout (1-9 then 0)
-# Returns 0-9 as the digit typed, or 10+/255 if cancelled.
-# Note: prompt returns 0-indexed button position, so we map it back to a digit.
+# Ask user to enter a single digit — uses the native gp_keypad SDL app
+# if available, otherwise falls back to the old prompt button list.
+# Returns: exit code = the digit (0-9), 255 = cancelled.
 ask_digit() {
+    if [ -x "$GP_KEYPAD" ]; then
+        "$GP_KEYPAD" "$1" "$2"
+        return $?
+    fi
+    # Fallback: old 10-button prompt (phone layout order)
     "$PROMPT" -t "$1" -m "$2" \
         "1" "2" "3" \
         "4" "5" "6" \
         "7" "8" "9" \
         "0"
     _rc=$?
-    # Cancelled / out of range
-    [ "$_rc" -ge 10 ] && return "$_rc"
-    # Map button index -> digit (last button = 0, others = index+1)
-    if [ "$_rc" -eq 9 ]; then
-        return 0
-    fi
+    [ "$_rc" -ge 10 ] && return 255
+    [ "$_rc" -eq 9 ] && return 0
     return $(( _rc + 1 ))
 }
 
