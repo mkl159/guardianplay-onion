@@ -1,0 +1,68 @@
+name: Build gp_keypad
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/App/ParentalControl/src/**'
+      - '.github/workflows/build-keypad.yml'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to attach binary to (e.g. v1.1.0). Leave empty to only upload an artifact.'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/shauninman/union-miyoomini-toolchain:latest
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build gp_keypad
+        run: |
+          cd src/App/ParentalControl/src
+          make
+          ls -la ../bin/
+
+      - name: Verify binary
+        run: |
+          file src/App/ParentalControl/bin/gp_keypad
+          test -x src/App/ParentalControl/bin/gp_keypad
+
+      - name: Upload as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gp_keypad
+          path: src/App/ParentalControl/bin/gp_keypad
+
+      - name: Attach to release
+        if: ${{ github.event.inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd src/App/ParentalControl/bin
+          gh release upload "${{ github.event.inputs.release_tag }}" \
+              gp_keypad --clobber
+
+      - name: Build release zip with binary
+        if: ${{ github.event.inputs.release_tag != '' }}
+        run: |
+          mkdir -p /tmp/rel
+          cp -r src/App /tmp/rel/
+          cd /tmp/rel
+          zip -r "GuardianPlay-${{ github.event.inputs.release_tag }}-with-keypad.zip" App
+          ls -la
+
+      - name: Upload zip with binary to release
+        if: ${{ github.event.inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.inputs.release_tag }}" \
+              "/tmp/rel/GuardianPlay-${{ github.event.inputs.release_tag }}-with-keypad.zip" \
+              --clobber
