@@ -269,25 +269,22 @@ main() {
 
                 _mins=$(( GP_TIMER_SECS / 60 ))
 
-                # --- Notifications (LED flash count = urgency level) ---
+                # --- Notifications: LED-only (popup during a running game crashes) ---
                 if [ "$_mins" -le 10 ] && [ "$_mins" -gt 5 ] && [ "$_notif_10" -eq 0 ]; then
                     _notif_10=1
                     flash_led 3 &
-                    "$INFOPANEL" --title "$GP_APP_NAME" --message "$GP_NOTIF_10MIN" --auto > /dev/null 2>&1 &
                     log "Notification: 10 min warning (LED x3)"
                 fi
 
                 if [ "$_mins" -le 5 ] && [ "$_mins" -gt 1 ] && [ "$_notif_5" -eq 0 ]; then
                     _notif_5=1
                     flash_led 6 &
-                    "$INFOPANEL" --title "$GP_APP_NAME" --message "$GP_NOTIF_5MIN" --auto > /dev/null 2>&1 &
                     log "Notification: 5 min warning (LED x6)"
                 fi
 
                 if [ "$_mins" -le 1 ] && [ "$GP_TIMER_SECS" -gt 0 ] && [ "$_notif_1" -eq 0 ]; then
                     _notif_1=1
                     flash_led 10 &
-                    "$INFOPANEL" --title "$GP_APP_NAME" --message "$GP_NOTIF_1MIN" --auto > /dev/null 2>&1 &
                     log "Notification: 1 min warning (LED x10)"
                 fi
 

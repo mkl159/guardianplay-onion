@@ -168,7 +168,12 @@ show_prelaunch_info() {
         _msg="$L_INFO_LEFT $_left"
     fi
 
-    "$INFOPANEL" --title "$L_INFO_TITLE" --message "$_msg" --auto
+    # Show the popup for ~4 seconds, then close it
+    "$INFOPANEL" --title "$L_INFO_TITLE" --message "$_msg" --persistent > /dev/null 2>&1 &
+    _ip_pid=$!
+    sleep 4
+    kill "$_ip_pid" 2>/dev/null
+    wait "$_ip_pid" 2>/dev/null
 }
 
 # Block and show message
