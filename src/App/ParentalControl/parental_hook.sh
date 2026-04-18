@@ -147,29 +147,46 @@ if [ ! -x "$PROMPT" ]; then
     exit 0
 fi
 
+# Phone-keypad-style digit prompt: returns 0-9 or sets _cancel=1
+ask_digit_hook() {
+    "$PROMPT" -t "$L_TITLE" -m "$1" \
+        "1" "2" "3" \
+        "4" "5" "6" \
+        "7" "8" "9" \
+        "0"
+    _rc=$?
+    if [ "$_rc" -ge 10 ]; then
+        _cancel=1
+        return 0
+    fi
+    if [ "$_rc" -eq 9 ]; then
+        _dval=0
+    else
+        _dval=$(( _rc + 1 ))
+    fi
+}
+
+_cancel=0
+
 # Digit 1 — also shows the bypass explanation
-"$PROMPT" -t "$L_TITLE" -m "$(printf "$L_DIGIT" 1)\n\n$L_MSG" \
-    "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
-d1=$?
-[ "$d1" -ge 10 ] && allow_with_timer
+ask_digit_hook "$(printf "$L_DIGIT" 1)\n\n$L_MSG\n\n_ _ _ _"
+[ "$_cancel" -eq 1 ] && allow_with_timer
+d1=$_dval
 
 # Digit 2
-"$PROMPT" -t "$L_TITLE" -m "$(printf "$L_DIGIT" 2)" \
-    "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
-d2=$?
-[ "$d2" -ge 10 ] && allow_with_timer
+ask_digit_hook "$(printf "$L_DIGIT" 2)\n\n* _ _ _"
+[ "$_cancel" -eq 1 ] && allow_with_timer
+d2=$_dval
 
 # Digit 3
-"$PROMPT" -t "$L_TITLE" -m "$(printf "$L_DIGIT" 3)" \
-    "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
-d3=$?
-[ "$d3" -ge 10 ] && allow_with_timer
+ask_digit_hook "$(printf "$L_DIGIT" 3)\n\n* * _ _"
+[ "$_cancel" -eq 1 ] && allow_with_timer
+d3=$_dval
 
 # Digit 4
-"$PROMPT" -t "$L_TITLE" -m "$(printf "$L_DIGIT" 4)" \
-    "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
-d4=$?
-[ "$d4" -ge 10 ] && allow_with_timer
+ask_digit_hook "$(printf "$L_DIGIT" 4)\n\n* * * _"
+[ "$_cancel" -eq 1 ] && allow_with_timer
+d4=$_dval
 
 # Check PIN
 ENTERED="${d1}${d2}${d3}${d4}"

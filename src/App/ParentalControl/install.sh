@@ -129,6 +129,17 @@ chmod +x "$APPDIR/uninstall.sh"
 # STEP 5: Create data directory with default config
 # ============================================================
 
+# Install app icon in Onion OS's Icons folder so it shows up in the Apps menu
+ICON_SRC="$APPDIR/res/guardianplay.png"
+ICON_DST_DIR="/mnt/SDCARD/Icons/Default/app"
+if [ -f "$ICON_SRC" ]; then
+    mkdir -p "$ICON_DST_DIR"
+    cp -f "$ICON_SRC" "$ICON_DST_DIR/guardianplay.png"
+    log "App icon installed to $ICON_DST_DIR/guardianplay.png"
+else
+    log "WARNING: icon not found at $ICON_SRC"
+fi
+
 mkdir -p "$APPDIR/data"
 if [ ! -f "$APPDIR/data/config.cfg" ]; then
     cat > "$APPDIR/data/config.cfg" << 'CFG_EOF'

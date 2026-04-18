@@ -52,6 +52,13 @@ fi
 # STEP 3: Restore runtime.sh from backup OR strip the patch
 # ============================================================
 
+# Remove installed app icon
+ICON_DST="/mnt/SDCARD/Icons/Default/app/guardianplay.png"
+if [ -f "$ICON_DST" ]; then
+    rm -f "$ICON_DST"
+    log "App icon removed."
+fi
+
 if [ -f "$BACKUP_RUNTIME" ]; then
     log "Restoring runtime.sh from backup..."
     cp "$BACKUP_RUNTIME" "$RUNTIME"

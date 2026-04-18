@@ -115,30 +115,48 @@ rotate_history() {
 # PIN MANAGEMENT
 # ============================================================
 
-# Ask user to enter a single digit (0-9)
-# Returns: exit code = the digit entered (0-9), 255 = cancelled
+# Ask user to enter a single digit — phone keypad layout (1-9 then 0)
+# Returns 0-9 as the digit typed, or 10+/255 if cancelled.
+# Note: prompt returns 0-indexed button position, so we map it back to a digit.
 ask_digit() {
     "$PROMPT" -t "$1" -m "$2" \
-        "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
-    return $?
+        "1" "2" "3" \
+        "4" "5" "6" \
+        "7" "8" "9" \
+        "0"
+    _rc=$?
+    # Cancelled / out of range
+    [ "$_rc" -ge 10 ] && return "$_rc"
+    # Map button index -> digit (last button = 0, others = index+1)
+    if [ "$_rc" -eq 9 ]; then
+        return 0
+    fi
+    return $(( _rc + 1 ))
+}
+
+# Build a progress string like "* * _ _" from entered digit count (0-4)
+_pin_progress() {
+    case "$1" in
+        0) echo "_ _ _ _" ;;
+        1) echo "* _ _ _" ;;
+        2) echo "* * _ _" ;;
+        3) echo "* * * _" ;;
+        4) echo "* * * *" ;;
+    esac
 }
 
 # Enter a 4-digit PIN interactively
 # Sets GP_ENTERED_PIN on success — returns 0=ok, 1=cancelled
 enter_pin_interactive() {
     _pin_title="$1"
-
-    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 1)"
-    _d1=$?; [ "$_d1" -ge 10 ] && return 1
-
-    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 2)"
-    _d2=$?; [ "$_d2" -ge 10 ] && return 1
-
-    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 3)"
-    _d3=$?; [ "$_d3" -ge 10 ] && return 1
-
-    ask_digit "$_pin_title" "$(printf "$GP_PIN_DIGIT" 4)"
-    _d4=$?; [ "$_d4" -ge 10 ] && return 1
+    for _slot in 1 2 3 4; do
+        _label=$(printf "$GP_PIN_DIGIT" "$_slot")
+        _bar=$(_pin_progress $(( _slot - 1 )))
+        ask_digit "$_pin_title" "${_label}\n\n${_bar}"
+        _rc=$?
+        [ "$_rc" -ge 10 ] && return 1
+        eval "_d${_slot}=$_rc"
+    done
 
     GP_ENTERED_PIN="${_d1}${_d2}${_d3}${_d4}"
     return 0
