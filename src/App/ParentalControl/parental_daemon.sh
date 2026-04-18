@@ -104,9 +104,39 @@ get_game_name() {
 # ============================================================
 # NOTIFICATIONS
 # ============================================================
+# infoPanel cannot draw over an active game (RetroArch holds the framebuffer).
+# For in-game alerts we flash the device LED, which always works.
+# infoPanel is still launched in background so it shows at game end.
+
+# Miyoo Mini / Mini+ LED sysfs paths
+LED_MAX="/sys/class/led_ctl/max_scale"
+LED_TRIG="/sys/class/led_ctl/trigger"
+LED_BLINK="/sys/class/led_ctl/blink"
+
+# Flash the LED N times (blocking) — safe to call in background with &
+flash_led() {
+    _count=${1:-5}
+    [ ! -w "$LED_TRIG" ] && return
+    # Remember previous brightness so we do not overwrite user settings
+    _prev_max=""
+    [ -r "$LED_MAX" ] && _prev_max=$(cat "$LED_MAX" 2>/dev/null)
+    [ -w "$LED_MAX" ] && echo 100 > "$LED_MAX" 2>/dev/null
+    _i=0
+    while [ "$_i" -lt "$_count" ]; do
+        echo 1 > "$LED_TRIG" 2>/dev/null
+        sleep 1
+        echo 0 > "$LED_TRIG" 2>/dev/null
+        sleep 1
+        _i=$(( _i + 1 ))
+    done
+    [ -n "$_prev_max" ] && [ -w "$LED_MAX" ] && echo "$_prev_max" > "$LED_MAX" 2>/dev/null
+}
 
 show_overlay() {
-    "$INFOPANEL" --title "$1" --message "$2" --auto &
+    # Flash LED — visible alert even while a game is running
+    flash_led 5 &
+    # Try infoPanel as well (will show at game end, or if no game is running)
+    "$INFOPANEL" --title "$1" --message "$2" --auto > /dev/null 2>&1 &
 }
 
 # Kill the currently running game — use same signal pattern as Onion OS
@@ -239,23 +269,26 @@ main() {
 
                 _mins=$(( GP_TIMER_SECS / 60 ))
 
-                # --- Notifications ---
+                # --- Notifications (LED flash count = urgency level) ---
                 if [ "$_mins" -le 10 ] && [ "$_mins" -gt 5 ] && [ "$_notif_10" -eq 0 ]; then
                     _notif_10=1
-                    show_overlay "$GP_APP_NAME" "$GP_NOTIF_10MIN"
-                    log "Notification: 10 min warning"
+                    flash_led 3 &
+                    "$INFOPANEL" --title "$GP_APP_NAME" --message "$GP_NOTIF_10MIN" --auto > /dev/null 2>&1 &
+                    log "Notification: 10 min warning (LED x3)"
                 fi
 
                 if [ "$_mins" -le 5 ] && [ "$_mins" -gt 1 ] && [ "$_notif_5" -eq 0 ]; then
                     _notif_5=1
-                    show_overlay "$GP_APP_NAME" "$GP_NOTIF_5MIN"
-                    log "Notification: 5 min warning"
+                    flash_led 6 &
+                    "$INFOPANEL" --title "$GP_APP_NAME" --message "$GP_NOTIF_5MIN" --auto > /dev/null 2>&1 &
+                    log "Notification: 5 min warning (LED x6)"
                 fi
 
                 if [ "$_mins" -le 1 ] && [ "$GP_TIMER_SECS" -gt 0 ] && [ "$_notif_1" -eq 0 ]; then
                     _notif_1=1
-                    show_overlay "$GP_APP_NAME" "$GP_NOTIF_1MIN"
-                    log "Notification: 1 min warning"
+                    flash_led 10 &
+                    "$INFOPANEL" --title "$GP_APP_NAME" --message "$GP_NOTIF_1MIN" --auto > /dev/null 2>&1 &
+                    log "Notification: 1 min warning (LED x10)"
                 fi
 
                 # --- TIME UP: KILL GAME ---
