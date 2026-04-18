@@ -12,7 +12,10 @@
 
 TARGET  = ../bin/gp_keypad
 
-CC      ?= $(CROSS_COMPILE)gcc
+# Default to the miyoomini cross-compiler prefix if not overridden
+CROSS_COMPILE ?= arm-linux-gnueabihf-
+CC      = $(CROSS_COMPILE)gcc
+STRIP   = $(CROSS_COMPILE)strip
 CFLAGS  += -O2 -Wall
 LDFLAGS += -lSDL -lSDL_ttf
 
@@ -28,7 +31,7 @@ all: $(TARGET)
 $(TARGET): $(SRC)
 	mkdir -p ../bin
 	$(CC) $(CFLAGS) $(SRC) -o $@ $(LDFLAGS)
-	$(CROSS_COMPILE)strip $@ || true
+	$(STRIP) $@ || true
 
 clean:
 	rm -f $(TARGET)
