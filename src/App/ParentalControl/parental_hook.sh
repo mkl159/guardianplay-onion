@@ -21,9 +21,13 @@
 APPDIR="/mnt/SDCARD/App/ParentalControl"
 SYSDIR="/mnt/SDCARD/.tmp_update"
 CONFIG="$APPDIR/data/config.cfg"
+STATS_FILE="$APPDIR/data/stats.dat"
 
 PROMPT="$SYSDIR/bin/prompt"
 INFOPANEL="$SYSDIR/bin/infoPanel"
+
+# ROM path passed by runtime.sh
+GP_ROM_PATH="${1:-}"
 
 export LD_LIBRARY_PATH="/lib:/config/lib:/mnt/SDCARD/miyoo/lib:$SYSDIR/lib:$SYSDIR/lib/parasyte"
 export PATH="$SYSDIR/bin:$PATH"
@@ -58,6 +62,10 @@ load_lang() {
             L_BYPASS_OK="Mode parent active !\nTemps de jeu illimite."
             L_BLOCKED_TITLE="Temps de jeu epuise"
             L_BLOCKED_MSG="Plus de temps de jeu disponible.\nDemandez l'autorisation a un parent."
+            L_INFO_TITLE="Temps de jeu"
+            L_INFO_LEFT="Temps restant :"
+            L_INFO_PLAYED="Deja joue sur ce jeu :"
+            L_H="h"; L_MIN="min"; L_SEC="sec"
             ;;
         es*)
             L_TITLE="GuardianPlay"
@@ -66,6 +74,10 @@ load_lang() {
             L_BYPASS_OK="Modo padre activado!\nTiempo de juego ilimitado."
             L_BLOCKED_TITLE="Tiempo de juego agotado"
             L_BLOCKED_MSG="No queda tiempo de juego.\nPida permiso a un padre."
+            L_INFO_TITLE="Tiempo de juego"
+            L_INFO_LEFT="Tiempo restante:"
+            L_INFO_PLAYED="Ya jugado en este juego:"
+            L_H="h"; L_MIN="min"; L_SEC="seg"
             ;;
         de*)
             L_TITLE="GuardianPlay"
@@ -74,6 +86,10 @@ load_lang() {
             L_BYPASS_OK="Elternmodus aktiv!\nUnbegrenzte Spielzeit."
             L_BLOCKED_TITLE="Spielzeit abgelaufen"
             L_BLOCKED_MSG="Keine Spielzeit mehr verfuegbar.\nFragen Sie einen Elternteil."
+            L_INFO_TITLE="Spielzeit"
+            L_INFO_LEFT="Verbleibende Zeit:"
+            L_INFO_PLAYED="Bereits gespielt:"
+            L_H="Std"; L_MIN="Min"; L_SEC="Sek"
             ;;
         it*)
             L_TITLE="GuardianPlay"
@@ -82,6 +98,10 @@ load_lang() {
             L_BYPASS_OK="Modalita genitore attiva!\nTempo di gioco illimitato."
             L_BLOCKED_TITLE="Tempo di gioco esaurito"
             L_BLOCKED_MSG="Nessun tempo di gioco disponibile.\nChiedere il permesso a un genitore."
+            L_INFO_TITLE="Tempo di gioco"
+            L_INFO_LEFT="Tempo rimanente:"
+            L_INFO_PLAYED="Gia giocato a questo gioco:"
+            L_H="h"; L_MIN="min"; L_SEC="sec"
             ;;
         pt*)
             L_TITLE="GuardianPlay"
@@ -90,6 +110,10 @@ load_lang() {
             L_BYPASS_OK="Modo parental ativo!\nTempo de jogo ilimitado."
             L_BLOCKED_TITLE="Tempo de jogo esgotado"
             L_BLOCKED_MSG="Sem tempo de jogo disponivel.\nPeca autorizacao a um adulto."
+            L_INFO_TITLE="Tempo de jogo"
+            L_INFO_LEFT="Tempo restante:"
+            L_INFO_PLAYED="Ja jogado neste jogo:"
+            L_H="h"; L_MIN="min"; L_SEC="seg"
             ;;
         *)
             L_TITLE="GuardianPlay"
@@ -98,8 +122,53 @@ load_lang() {
             L_BYPASS_OK="Parent mode active!\nUnlimited play time."
             L_BLOCKED_TITLE="No Play Time Left"
             L_BLOCKED_MSG="No more play time available.\nAsk a parent for permission."
+            L_INFO_TITLE="Play Time"
+            L_INFO_LEFT="Time remaining:"
+            L_INFO_PLAYED="Already played on this game:"
+            L_H="h"; L_MIN="min"; L_SEC="sec"
             ;;
     esac
+}
+
+# Format seconds as "Xh YYmin", "YYmin", or "NNsec"
+format_time_hook() {
+    _s="$1"
+    _h=$(( _s / 3600 ))
+    _m=$(( (_s % 3600) / 60 ))
+    _sec=$(( _s % 60 ))
+    if [ "$_h" -gt 0 ]; then
+        printf "%d%s %02d%s" "$_h" "$L_H" "$_m" "$L_MIN"
+    elif [ "$_m" -gt 0 ]; then
+        printf "%d%s" "$_m" "$L_MIN"
+    else
+        printf "%d%s" "$_sec" "$L_SEC"
+    fi
+}
+
+# Total seconds already recorded for this game (0 if never played)
+get_played_seconds() {
+    _g="$1"
+    [ ! -f "$STATS_FILE" ] && { echo 0; return; }
+    _v=$(grep -F "${_g}|" "$STATS_FILE" 2>/dev/null | head -1 | cut -d'|' -f2)
+    echo "${_v:-0}"
+}
+
+# Popup shown right before the game starts when the user chose timed play (B)
+show_prelaunch_info() {
+    [ ! -x "$INFOPANEL" ] && return
+    _base=$(basename "$GP_ROM_PATH")
+    _game="${_base%.*}"
+    _left=$(format_time_hook "$GP_TIMER_SECS")
+    _played=$(get_played_seconds "$_game")
+
+    if [ "$_played" -gt 0 ]; then
+        _played_fmt=$(format_time_hook "$_played")
+        _msg="$L_INFO_LEFT $_left\n\n$L_INFO_PLAYED\n$_played_fmt"
+    else
+        _msg="$L_INFO_LEFT $_left"
+    fi
+
+    "$INFOPANEL" --title "$L_INFO_TITLE" --message "$_msg" --auto
 }
 
 # Block and show message
@@ -117,6 +186,7 @@ allow_with_timer() {
     if [ "$GP_TIMER_SECS" -le 0 ]; then
         block_launch
     fi
+    show_prelaunch_info
     exit 0
 }
 
