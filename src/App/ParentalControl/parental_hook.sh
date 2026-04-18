@@ -172,8 +172,7 @@ show_prelaunch_info() {
     "$INFOPANEL" --title "$L_INFO_TITLE" --message "$_msg" --persistent > /dev/null 2>&1 &
     _ip_pid=$!
     sleep 4
-    kill "$_ip_pid" 2>/dev/null
-    wait "$_ip_pid" 2>/dev/null
+    kill -9 "$_ip_pid" 2>/dev/null
 }
 
 # Block and show message
