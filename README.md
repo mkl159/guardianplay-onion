@@ -255,9 +255,9 @@ Affiche le **temps cumulé par jeu**, trié du plus joué au moins joué.
 Temps total : 12h 34min
 
 Top jeux :
-1. Super Mario World — 3h 15min
-2. Sonic the Hedgehog — 2h 40min
-3. Pokemon Red — 1h 55min
+1. CyberQuest 2099 — 3h 15min
+2. Galactic Racers — 2h 40min
+3. Dragon's Awakening — 1h 55min
 ...
 ```
 
@@ -268,9 +268,9 @@ Affiche les **50 derniers lancements** avec date/heure, paginés par 10.
 ```
 📋 Historique  (Page 1/5)
 ─────────────────────────────────
-1. [2024-01-15 18:32] Mario Bros
-2. [2024-01-15 17:10] Zelda
-3. [2024-01-14 20:05] Sonic
+1. [2024-01-15 18:32] CyberQuest 2099
+2. [2024-01-15 17:10] Mystic Swords
+3. [2024-01-14 20:05] Galactic Racers
 ...
 ```
 
