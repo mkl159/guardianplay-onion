@@ -104,6 +104,13 @@ guardianplay-onion/
 │           ├── 📄 install.sh       ← Installeur automatique
 │           ├── 📄 uninstall.sh     ← Désinstalleur
 │           │
+│           ├── 📂 bin/
+│           │   └── 📄 gp_keypad        ← Clavier numérique PIN compilé
+│           │
+│           ├── 📂 src/
+│           │   ├── 📄 gp_keypad.c      ← Code source C du clavier
+│           │   └── 📄 Makefile         ← Instructions de compilation
+│           │
 │           ├── 📂 lang/
 │           │   ├── 📄 fr.sh        ← Traductions françaises
 │           │   ├── 📄 en.sh        ← Traductions anglaises
@@ -114,6 +121,7 @@ guardianplay-onion/
 │           │
 │           ├── 📂 res/
 │           │   ├── 🎨 guardianplay.png   ← Icône app (96x96 PNG)
+│           │   ├── 📄 font.ttf           ← Police TrueType du clavier
 │           │   └── 📄 create_icon.py     ← Script de génération d'icône
 │           │
 │           └── 📂 data/            ← Créé automatiquement au 1er lancement
