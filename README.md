@@ -10,7 +10,7 @@
 [![Onion OS](https://img.shields.io/badge/Onion%20OS-4.3%2B-blue?style=for-the-badge&logo=linux)](https://github.com/OnionUI/Onion)
 [![Miyoo Mini](https://img.shields.io/badge/Miyoo-Mini%20%2F%20Mini%2B-green?style=for-the-badge)](https://miyoo.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.2.0-orange?style=for-the-badge)]()
 [![Languages](https://img.shields.io/badge/Lang-FR%20%7C%20EN%20%7C%20ES%20%7C%20DE%20%7C%20IT%20%7C%20PT-purple?style=for-the-badge)]()
 
 </div>

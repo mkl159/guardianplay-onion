@@ -12,6 +12,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+void debug_log(const char *msg) {
+    FILE *log = fopen("/mnt/SDCARD/App/ParentalControl/data/gp_keypad.log", "a");
+    if (log) { fprintf(log, "%s\n", msg); fclose(log); }
+}
+
 #define SCREEN_W 640
 #define SCREEN_H 480
 
@@ -35,12 +40,17 @@ static TTF_Font *open_font(int size) {
         "/mnt/SDCARD/miyoo/app/Helvetica-Neue.ttf",
         "/customer/app/Helvetica-Neue.ttf",
         "/mnt/SDCARD/.tmp_update/res/fonts/OnionFont.ttf",
+        "/mnt/SDCARD/Themes/default/font.ttf",
         NULL
     };
     for (int i = 0; paths[i]; i++) {
         TTF_Font *f = TTF_OpenFont(paths[i], size);
         if (f) return f;
     }
+    
+    char err[256];
+    snprintf(err, sizeof(err), "Failed to load any fonts. TTF Error: %s", TTF_GetError());
+    debug_log(err);
     return NULL;
 }
 
@@ -50,6 +60,16 @@ static void draw_text_centered(SDL_Surface *dst, TTF_Font *f, const char *s,
     SDL_Surface *t = TTF_RenderUTF8_Blended(f, s, col);
     if (!t) return;
     SDL_Rect r = { cx - t->w/2, cy - t->h/2, 0, 0 };
+    SDL_BlitSurface(t, NULL, dst, &r);
+    SDL_FreeSurface(t);
+}
+
+static void draw_text_right(SDL_Surface *dst, TTF_Font *f, const char *s,
+                               int rx, int cy, SDL_Color col) {
+    if (!s || !*s) return;
+    SDL_Surface *t = TTF_RenderUTF8_Blended(f, s, col);
+    if (!t) return;
+    SDL_Rect r = { rx - t->w, cy - t->h/2, 0, 0 };
     SDL_BlitSurface(t, NULL, dst, &r);
     SDL_FreeSurface(t);
 }
@@ -83,17 +103,30 @@ int main(int argc, char *argv[]) {
     const char *title   = (argc > 1) ? argv[1] : "PIN Code";
     const char *message = (argc > 2) ? argv[2] : "";
 
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 255;
-    if (TTF_Init() != 0) { SDL_Quit(); return 255; }
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        debug_log("SDL_Init Error");
+        return 255;
+    }
 
-    SDL_Surface *screen = SDL_SetVideoMode(SCREEN_W, SCREEN_H, 32, SDL_HWSURFACE);
-    if (!screen) { TTF_Quit(); SDL_Quit(); return 255; }
+    if (TTF_Init() != 0) { 
+        debug_log("TTF_Init Error");
+        SDL_Quit(); return 255; 
+    }
+
+    SDL_Surface *screen = SDL_SetVideoMode(SCREEN_W, SCREEN_H, 32, SDL_SWSURFACE | SDL_DOUBLEBUF);
+    if (!screen) { 
+        debug_log("VideoMode Error");
+        TTF_Quit(); SDL_Quit(); return 255; 
+    }
     SDL_ShowCursor(SDL_DISABLE);
 
     TTF_Font *f_title = open_font(28);
     TTF_Font *f_msg   = open_font(18);
     TTF_Font *f_digit = open_font(44);
-    if (!f_title || !f_msg || !f_digit) { TTF_Quit(); SDL_Quit(); return 255; }
+    if (!f_title || !f_msg || !f_digit) { 
+        debug_log("Fatal: One or more fonts could not be loaded.");
+        TTF_Quit(); SDL_Quit(); return 255; 
+    }
 
     SDL_Color white  = {255,255,255,0};
     SDL_Color grey   = {180,180,180,0};
@@ -150,16 +183,33 @@ int main(int argc, char *argv[]) {
 
         // Title
         draw_text_centered(screen, f_title, title, SCREEN_W/2, 30, yellow);
-        // Message (may contain one \n for a 2-line layout)
+        // Message (may contain \n or literal "\\n" for a multi-line layout)
         if (message && *message) {
             char buf[256];
             strncpy(buf, message, sizeof(buf)-1);
             buf[sizeof(buf)-1] = '\0';
-            char *line2 = strchr(buf, '\n');
-            if (line2) { *line2 = '\0'; line2++; }
-            draw_text_centered(screen, f_msg, buf, SCREEN_W/2, 80, white);
-            if (line2)
-                draw_text_centered(screen, f_msg, line2, SCREEN_W/2, 108, grey);
+            
+            // Replace literal "\n" with actual newlines
+            char *p = buf;
+            while ((p = strstr(p, "\\n")) != NULL) {
+                *p = '\n';
+                memmove(p + 1, p + 2, strlen(p + 2) + 1);
+            }
+
+            int cy = 65; // Start Y position for text
+            char *line = buf;
+            while (line) {
+                char *next = strchr(line, '\n');
+                if (next) { *next = '\0'; next++; }
+                
+                SDL_Color c = (line == buf) ? white : grey; // First line white, rest grey
+                if (*line) {
+                    draw_text_centered(screen, f_msg, line, SCREEN_W/2, cy, c);
+                }
+                cy += 28; // Line spacing
+                
+                line = next;
+            }
         }
 
         // Draw cells
@@ -176,6 +226,21 @@ int main(int argc, char *argv[]) {
             SDL_Color tc = ((int)i == sel) ? (SDL_Color){20,20,30,0} : white;
             draw_text_centered(screen, f_digit, d, x + cell_w/2, y + cell_h/2, tc);
         }
+
+        // Footer hint (bottom right)
+        draw_text_right(screen, f_msg, "[B] Retour / Annuler", SCREEN_W - 20, SCREEN_H - 25, grey);
+
+        // --- Manual 180 Degree Flip for Miyoo Mini Plus ---
+        if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
+        Uint32 *pixels = (Uint32 *)screen->pixels;
+        int total_pixels = SCREEN_W * SCREEN_H;
+        for (int p = 0; p < total_pixels / 2; p++) {
+            Uint32 temp = pixels[p];
+            pixels[p] = pixels[total_pixels - 1 - p];
+            pixels[total_pixels - 1 - p] = temp;
+        }
+        if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
+        // --------------------------------------------------
 
         SDL_Flip(screen);
         SDL_Delay(16);
