@@ -324,7 +324,10 @@ Boot
   ├─ runtime.sh :: launch_game()
   │    ├─ playActivity start "$rompath"
   │    ├─ [GUARDIANPLAY HOOK] parental_hook.sh "$rompath"
-  │    │    └─ Si temps=0 ET activé → BLOQUE (exit 1)
+  │    │    ├─ gp_keypad demande le code PIN
+  │    │    ├─ Si PIN OK → Mode Bypass (illimité)
+  │    │    ├─ Si Annuler (B) et temps > 0 → Autorise lancement (décompte actif)
+  │    │    └─ Si Annuler (B) et temps = 0 → BLOQUE (exit 1, jeu non lancé)
   │    └─ $sysdir/cmd_to_run.sh  ← jeu lancé
   │
   │  [Game is running]
